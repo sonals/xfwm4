@@ -37,6 +37,7 @@
 #include "icons.h"
 #include "display.h"
 #include "hints.h"
+#include "compositor.h"
 
 /*
  * create a GdkPixbuf from inline data and scale it to a given size
@@ -561,4 +562,41 @@ getAppIcon (DisplayInfo *display_info, Window window, int width, int height)
     }
 
     return inline_icon_at_size (default_icon_data, width, height);
+}
+
+
+GdkPixbuf *
+getAppPreview (DisplayInfo *display_info, Window window, int width, int height, const char *name)
+{
+    XImage *image;
+    GdkPixbuf *pixbuf;
+    GdkImage *preview_val;
+    Pixmap preview_pixmap;
+
+    image = compositorGetWindowPreview(display_info, window);
+    //preview_pixmap = compositorGetWindowPreviewPixmap(c->screen_info->display_info, c->frame);
+
+    if (!image)
+    {
+        return NULL;
+    }
+    DBG ("%s: preview image = %p, bits_per_sample = 0x%x, depth = 0x%x, bytes_per_line = 0x%x\nheight = 0x%x, width = 0x%x\n",
+         name, image, image->bitmap_unit, image->depth, image->bytes_per_line,
+         image->height, image->width);
+
+    //gdk_pixmap = gdk_pixmap_foreign_new_for_display(c->screen_info->display_info->gdisplay, preview_pixmap);
+    //icon = gtk_image_new_from_pixmap(gdk_pixmap, NULL);
+    pixbuf = gdk_pixbuf_new_from_data ((guchar *) image->data,
+                                       GDK_COLORSPACE_RGB,
+                                       TRUE,
+                                       8,
+                                       image->width,
+                                       image->height,
+                                       image->bytes_per_line,
+                                       NULL,
+                                       NULL);
+
+
+    //g_object_unref (gdk_pixmap);
+    return pixbuf;
 }

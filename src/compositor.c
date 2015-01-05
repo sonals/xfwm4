@@ -103,6 +103,10 @@
 
 #define DRM_CARD0             "/dev/dri/card0"
 
+#ifndef WIN_ICON_SIZE
+#define WIN_ICON_SIZE 96
+#endif
+
 typedef struct _CWindow CWindow;
 struct _CWindow
 {
@@ -142,6 +146,9 @@ struct _CWindow
     gint shadow_height;
 
     guint opacity;
+
+    XImage *preview;
+    Pixmap preview_pixmap;
 };
 
 static CWindow*
@@ -151,11 +158,12 @@ find_cwindow_in_screen (ScreenInfo *screen_info, Window id)
 
     g_return_val_if_fail (id != None, NULL);
     g_return_val_if_fail (screen_info != NULL, NULL);
-    TRACE ("entering find_cwindow_in_screen");
+    TRACE ("entering find_cwindow_in_screen for 0x%lx", id);
 
     for (list = screen_info->cwindows; list; list = g_list_next (list))
     {
         CWindow *cw = (CWindow *) list->data;
+//        DBG ("find_cwindow_in_screen found 0x%lx", cw->id);
         if (cw->id == id)
         {
             return cw;
@@ -738,6 +746,18 @@ free_win_data (CWindow *cw, gboolean delete)
         cw->name_window_pixmap = None;
     }
 #endif
+
+    if (delete && cw->preview)
+    {
+        XDestroyImage(cw->preview);
+        cw->preview = NULL;
+    }
+
+    if (delete && cw->preview_pixmap)
+    {
+        XFreePixmap (display_info->dpy, cw->preview_pixmap);
+        cw->preview_pixmap = None;
+    }
 
     if (cw->picture)
     {
@@ -1525,7 +1545,7 @@ paint_all (ScreenInfo *screen_info, XserverRegion region)
     TRACE ("Copying data back to screen");
     if(screen_info->zoomed)
     {
-        /* Fixme: copy back whole screen if zoomed 
+        /* Fixme: copy back whole screen if zoomed
            It would be better to scale the clipping region if possible. */
         XFixesSetPictureClipRegion (dpy, screen_info->rootBuffer, 0, 0, None);
     }
@@ -1537,7 +1557,7 @@ paint_all (ScreenInfo *screen_info, XserverRegion region)
 #ifdef HAVE_LIBDRM
 #if TIMEOUT_REPAINT
     use_dri = dri_enabled (screen_info);
-    
+
     if (use_dri)
     {
         /* sync all previous rendering commands, tell xlib to render the pixmap
@@ -2007,6 +2027,99 @@ map_win (CWindow *cw)
     }
 }
 
+
+static void
+update_win_preview (DisplayInfo *display_info, CWindow *cw)
+{
+#ifdef HAVE_COMPOSITOR
+    XRenderPictFormat *format;
+    XRenderPictureAttributes pa;
+    Picture picture;
+    double scale_x, scale_y;
+    XTransform xform;
+
+    static XTransform identity = {{
+            { XDoubleToFixed(1), XDoubleToFixed(0), XDoubleToFixed(0) },
+            { XDoubleToFixed(0), XDoubleToFixed(1), XDoubleToFixed(0) },
+            { XDoubleToFixed(0), XDoubleToFixed(0), XDoubleToFixed(1) }}};
+
+    DBG ("entering for window 0x%lx", cw->id);
+
+    if (!compositorIsUsable (display_info))
+    {
+        return;
+    }
+
+    if (!WIN_HAS_CLIENT(cw))
+    {
+        return;
+    }
+
+    format = get_window_format (cw);
+
+    if (!format)
+    {
+        return;
+    }
+
+    if (!cw->preview_pixmap)
+    {
+        DBG ("preview_pixmap not found for window 0x%lx", cw->id);
+        return;
+    }
+
+    DBG ("rendering preview for window 0x%lx", cw->id);
+
+    pa.subwindow_mode = IncludeInferiors;
+    picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, CPSubwindowMode, &pa);
+
+    memset(&xform, 0, sizeof(xform));
+
+    scale_x = WIN_ICON_SIZE / cw->attr.width;
+    scale_y = WIN_ICON_SIZE / cw->attr.height;
+    xform.matrix[0][0] = XDoubleToFixed(scale_x);
+    xform.matrix[1][1] = XDoubleToFixed(scale_y);
+    xform.matrix[2][2] = XDoubleToFixed(1.0);
+
+    XRenderSetPictureTransform(display_info->dpy, cw->picture, &xform);
+    XRenderSetPictureFilter(display_info->dpy, cw->picture, "good", NULL, 0);
+
+    XRenderComposite(display_info->dpy, PictOpSrc,
+                     cw->picture, None, picture,
+                     0, 0, 0, 0, 0, 0,
+                     WIN_ICON_SIZE,
+                     WIN_ICON_SIZE);
+
+    XRenderSetPictureTransform(display_info->dpy, cw->picture, &identity);
+    XRenderSetPictureFilter(display_info->dpy, cw->picture, "fast", NULL, 0);
+
+    if (cw->preview)
+    {
+        XDestroyImage(cw->preview);
+    }
+    cw->preview = XGetImage(display_info->dpy, cw->preview_pixmap, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE, AllPlanes, ZPixmap);
+
+    XRenderFreePicture(display_info->dpy, picture);
+#endif /* HAVE_COMPOSITOR */
+}
+
+
+static XImage *
+win_preview(DisplayInfo *display_info, CWindow *cw)
+{
+#ifdef HAVE_COMPOSITOR
+    DBG ("preview for window 0x%lx", cw->id);
+    if (cw->viewable)
+    {
+        update_win_preview(display_info, cw);
+    }
+    return cw->preview;
+#else
+    return NULL;
+#endif
+}
+
+
 static void
 unmap_win (CWindow *cw)
 {
@@ -2014,10 +2127,12 @@ unmap_win (CWindow *cw)
     DisplayInfo *display_info;
 
     g_return_if_fail (cw != NULL);
-    TRACE ("entering unmap_win 0x%lx", cw->id);
+    DBG ("entering unmap_win 0x%lx", cw->id);
 
     screen_info = cw->screen_info;
     display_info = screen_info->display_info;
+
+    update_win_preview(screen_info->display_info, cw);
 
     if (!WIN_IS_REDIRECTED(cw) && (screen_info->wins_unredirected > 0))
     {
@@ -2092,8 +2207,10 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
 {
     ScreenInfo *screen_info;
     CWindow *new;
+    XRenderPictFormat *format;
+    const char *name = "";
 
-    TRACE ("entering add_win: 0x%lx", id);
+    DBG ("entering add_win: 0x%lx", id);
 
     new = g_new0 (CWindow, 1);
 
@@ -2109,6 +2226,7 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
     if (c)
     {
         screen_info = c->screen_info;
+        DBG("ID 0x%lx, Window 0x%lx, Frame 0x%lx", id, c->window, c->frame);
     }
     else
     {
@@ -2184,12 +2302,25 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
     init_opacity (new);
     determine_mode (new);
 
+    new->preview = NULL;
+    new->preview_pixmap = None;
     /* Insert window at top of stack */
     screen_info->cwindows = g_list_prepend (screen_info->cwindows, new);
 
     if (WIN_IS_VISIBLE(new))
     {
         map_win (new);
+    }
+
+    format = get_window_format (new);
+
+    if (c && format)
+    {
+        new->preview_pixmap = XCreatePixmap(display_info->dpy, screen_info->output,
+                                            WIN_ICON_SIZE, WIN_ICON_SIZE, format->depth);
+
+        name = c->name;
+        DBG("preview_pixmap created for window 0x%lx (%s)", id, name);
     }
 
     TRACE ("window 0x%lx added", id);
@@ -2459,7 +2590,7 @@ zoom_timeout_cb (gpointer data)
     static int   x_old=-1, y_old=-1;
 
     screen_info = (ScreenInfo *) data;
-    
+
     if(!screen_info->zoomed)
     {
         screen_info->zoom_timeout_id = 0;
@@ -3609,4 +3740,67 @@ compositorTestServer (DisplayInfo *display_info)
 #else /* HAVE_COMPOSITOR */
     return FALSE;
 #endif /* HAVE_COMPOSITOR */
+}
+
+
+XImage *
+compositorGetWindowPreview(DisplayInfo *display_info, Window id)
+{
+#ifdef HAVE_COMPOSITOR
+    CWindow *cw = None;
+
+    g_return_if_fail (display_info != NULL);
+    g_return_if_fail (id != None);
+    DBG ("entering for 0x%lx", id);
+
+    if (!compositorIsUsable (display_info))
+    {
+        return NULL;
+    }
+
+    cw = find_cwindow_in_display (display_info, id);
+    if (cw)
+    {
+        return win_preview(display_info, cw);
+    }
+    DBG ("could not find 0x%lx", id);
+    return NULL;
+#else /* HAVE_COMPOSITOR */
+    return NULL;
+#endif
+}
+
+
+Pixmap
+compositorGetWindowPreviewPixmap(DisplayInfo *display_info, Window id)
+{
+#ifdef HAVE_COMPOSITOR
+    CWindow *cw = None;
+
+    g_return_if_fail (display_info != NULL);
+    g_return_if_fail (id != None);
+    DBG ("entering for 0x%lx", id);
+
+    if (!compositorIsUsable (display_info))
+    {
+        return None;
+    }
+
+    cw = find_cwindow_in_display (display_info, id);
+
+    if (!cw)
+    {
+        DBG ("could not find 0x%lx", id);
+        return None;
+    }
+
+    if (cw->viewable)
+    {
+        update_win_preview(display_info, cw);
+    }
+
+    return cw->preview_pixmap;
+#else /* HAVE_COMPOSITOR */
+    return None;
+#endif
 }

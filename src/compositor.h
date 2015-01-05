@@ -74,4 +74,10 @@ void                     compositorWindowSetOpacity             (DisplayInfo *,
 void                     compositorRebuildScreen                (ScreenInfo *);
 gboolean                 compositorTestServer                   (DisplayInfo *);
 
+XImage                  *compositorGetWindowPreview             (DisplayInfo *,
+                                                                 Window);
+
+Pixmap                   compositorGetWindowPreviewPixmap       (DisplayInfo *,
+                                                                 Window);
+
 #endif /* INC_COMPOSITOR_H */

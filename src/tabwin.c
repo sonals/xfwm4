@@ -25,11 +25,11 @@
 #endif
 
 #ifndef WIN_ICON_SIZE
-#define WIN_ICON_SIZE 48
+#define WIN_ICON_SIZE 96
 #endif
 
 #ifndef LISTVIEW_WIN_ICON_SIZE
-#define LISTVIEW_WIN_ICON_SIZE 24
+#define LISTVIEW_WIN_ICON_SIZE 48
 #endif
 
 #ifndef WIN_ICON_BORDER
@@ -60,6 +60,7 @@
 #include "focus.h"
 #include "tabwin.h"
 #include "settings.h"
+#include "compositor.h"
 
 static void tabwin_widget_class_init (TabwinWidgetClass *klass);
 
@@ -324,6 +325,7 @@ tabwinSelectWidget (Tabwin *t)
     return tabwinGetSelected (t);
 }
 
+#if 0
 static GtkWidget *
 createWindowIcon (Client *c, gint icon_size)
 {
@@ -360,6 +362,53 @@ createWindowIcon (Client *c, gint icon_size)
 
     return icon;
 }
+#else
+static GtkWidget *
+createWindowIcon (Client *c, gint icon_size)
+{
+    GdkPixbuf *icon_pixbuf;
+    GdkPixbuf *icon_pixbuf_stated;
+    GtkWidget *icon;
+    XImage *preview_image;
+    GdkPixmap *gdk_pixmap;
+    GdkImage *preview_val;
+    Pixmap preview_pixmap;
+
+    g_return_val_if_fail (c, NULL);
+    DBG ("entering createWindowIcon");
+
+    icon_pixbuf = getAppPreview(c->screen_info->display_info, c->frame, icon_size, icon_size, c->name);
+    icon = gtk_image_new ();
+
+    if (!icon_pixbuf)
+    {
+        icon_pixbuf = getAppIcon (c->screen_info->display_info, c->window, icon_size, icon_size);
+    }
+    icon_pixbuf_stated = NULL;
+
+    if (icon_pixbuf)
+    {
+        if (FLAG_TEST (c->flags, CLIENT_FLAG_ICONIFIED))
+        {
+            icon_pixbuf_stated = gdk_pixbuf_copy (icon_pixbuf);
+            gdk_pixbuf_saturate_and_pixelate (icon_pixbuf, icon_pixbuf_stated, 0.55, TRUE);
+            gtk_image_set_from_pixbuf (GTK_IMAGE (icon), icon_pixbuf_stated);
+            g_object_unref(icon_pixbuf_stated);
+        }
+        else
+        {
+            gtk_image_set_from_pixbuf (GTK_IMAGE (icon), icon_pixbuf);
+        }
+        g_object_unref(icon_pixbuf);
+    }
+    else
+    {
+        gtk_image_set_from_stock (GTK_IMAGE (icon), "gtk-missing-image", GTK_ICON_SIZE_DIALOG);
+    }
+
+    return icon;
+}
+#endif
 
 static int
 getMinMonitorWidth (ScreenInfo *screen_info)
@@ -491,7 +540,7 @@ createWindowlist (ScreenInfo *screen_info, TabwinWidget *tbw)
     monitor_height = getMinMonitorHeight (screen_info);
     g_return_val_if_fail (screen_info->client_count > 0, NULL);
 
-    gtk_widget_style_get (GTK_WIDGET (tbw), "icon-size", &icon_size, NULL);
+    //gtk_widget_style_get (GTK_WIDGET (tbw), "icon-size", &icon_size, NULL);
     tbw->widgets = NULL;
 
     /* We need to account for changes to the font size in the user's
@@ -524,7 +573,7 @@ createWindowlist (ScreenInfo *screen_info, TabwinWidget *tbw)
     else
     {
         icon_size = LISTVIEW_WIN_ICON_SIZE;
-        gtk_widget_style_get (GTK_WIDGET (tbw), "listview-icon-size", &icon_size, NULL);
+        //gtk_widget_style_get (GTK_WIDGET (tbw), "listview-icon-size", &icon_size, NULL);
         tbw->grid_rows = (monitor_height / (icon_size + 2 * WIN_ICON_BORDER)) * 0.75;
         tbw->grid_cols = screen_info->client_count / tbw->grid_rows + 1;
     }
@@ -1209,4 +1258,3 @@ tabwinDestroy (Tabwin *t)
     }
     g_list_free (t->tabwin_list);
 }
-

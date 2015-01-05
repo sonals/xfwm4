@@ -39,4 +39,9 @@ GdkPixbuf               *getAppIcon                             (DisplayInfo *,
                                                                  int,
                                                                  int);
 
+GdkPixbuf               *getAppPreview                          (DisplayInfo *,
+                                                                 Window,
+                                                                 int,
+                                                                 int,
+                                                                 const char*);
 #endif /* INC_ICONS_H */
