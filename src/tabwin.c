@@ -25,7 +25,7 @@
 #endif
 
 #ifndef WIN_ICON_SIZE
-#define WIN_ICON_SIZE 96
+#define WIN_ICON_SIZE 192
 #endif
 
 #ifndef LISTVIEW_WIN_ICON_SIZE

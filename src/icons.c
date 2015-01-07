@@ -572,9 +572,8 @@ getAppPreview (DisplayInfo *display_info, Window window, int width, int height, 
     GdkPixbuf *pixbuf;
     GdkImage *preview_val;
     Pixmap preview_pixmap;
-
+    char file_name[128];
     image = compositorGetWindowPreview(display_info, window);
-    //preview_pixmap = compositorGetWindowPreviewPixmap(c->screen_info->display_info, c->frame);
 
     if (!image)
     {
@@ -584,8 +583,6 @@ getAppPreview (DisplayInfo *display_info, Window window, int width, int height, 
          name, image, image->bitmap_unit, image->depth, image->bytes_per_line,
          image->height, image->width);
 
-    //gdk_pixmap = gdk_pixmap_foreign_new_for_display(c->screen_info->display_info->gdisplay, preview_pixmap);
-    //icon = gtk_image_new_from_pixmap(gdk_pixmap, NULL);
     pixbuf = gdk_pixbuf_new_from_data ((guchar *) image->data,
                                        GDK_COLORSPACE_RGB,
                                        TRUE,
@@ -596,7 +593,15 @@ getAppPreview (DisplayInfo *display_info, Window window, int width, int height, 
                                        NULL,
                                        NULL);
 
-
-    //g_object_unref (gdk_pixmap);
+#if 0
+    sprintf(file_name, "/tmp/%s.dat", name);
+    FILE *file = fopen(file_name, "w+");
+    if (file)
+    {
+        DBG("Writing image data to %s", file_name);
+        fwrite(image->data, 1, image->bytes_per_line * image->height, file);
+        fclose(file);
+    }
+#endif
     return pixbuf;
 }

@@ -104,7 +104,7 @@
 #define DRM_CARD0             "/dev/dri/card0"
 
 #ifndef WIN_ICON_SIZE
-#define WIN_ICON_SIZE 96
+#define WIN_ICON_SIZE 192
 #endif
 
 typedef struct _CWindow CWindow;
@@ -2075,8 +2075,8 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
 
     memset(&xform, 0, sizeof(xform));
 
-    scale_x = WIN_ICON_SIZE / cw->attr.width;
-    scale_y = WIN_ICON_SIZE / cw->attr.height;
+    scale_x = cw->attr.width / (double)WIN_ICON_SIZE;
+    scale_y = cw->attr.height / (double)WIN_ICON_SIZE;
     xform.matrix[0][0] = XDoubleToFixed(scale_x);
     xform.matrix[1][1] = XDoubleToFixed(scale_y);
     xform.matrix[2][2] = XDoubleToFixed(1.0);
