@@ -2035,8 +2035,11 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderPictFormat *format;
     XRenderPictureAttributes pa;
     Picture picture;
-    double scale_x, scale_y;
+    double scale_x, scale_y, scale;
+    int icon_x, icon_y;
+    int icon_width_x, icon_width_y;
     XTransform xform;
+    XRenderColor c;
 
     static XTransform identity = {{
             { XDoubleToFixed(1), XDoubleToFixed(0), XDoubleToFixed(0) },
@@ -2073,12 +2076,40 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     pa.subwindow_mode = IncludeInferiors;
     picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, CPSubwindowMode, &pa);
 
+    c.alpha = 0x0;
+    c.red   = 0x0;
+    c.green = 0x0;
+    c.blue  = 0x0;
+
+    XRenderFillRectangle(display_info->dpy, PictOpSrc,
+                         picture, &c, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
+
     memset(&xform, 0, sizeof(xform));
 
+    icon_x = 0;
+    icon_y = 0;
+    icon_width_x = WIN_ICON_SIZE;
+    icon_width_y = WIN_ICON_SIZE;
+    if (cw->attr.width > cw->attr.height)
+    {
+        scale = (double) cw->attr.width / (double)WIN_ICON_SIZE;
+        icon_y = ((double)WIN_ICON_SIZE - (double) cw->attr.height / scale) / 2.0;
+        icon_width_y = (double) cw->attr.height / scale;
+    }
+    else
+    {
+        scale = cw->attr.height / (double)WIN_ICON_SIZE;
+        icon_x = ((double)WIN_ICON_SIZE - (double) cw->attr.width / scale) / 2.0;
+        icon_width_x = (double) cw->attr.width / scale;
+    }
+    /*
     scale_x = cw->attr.width / (double)WIN_ICON_SIZE;
     scale_y = cw->attr.height / (double)WIN_ICON_SIZE;
     xform.matrix[0][0] = XDoubleToFixed(scale_x);
     xform.matrix[1][1] = XDoubleToFixed(scale_y);
+    */
+    xform.matrix[0][0] = XDoubleToFixed(scale);
+    xform.matrix[1][1] = XDoubleToFixed(scale);
     xform.matrix[2][2] = XDoubleToFixed(1.0);
 
     XRenderSetPictureTransform(display_info->dpy, cw->picture, &xform);
@@ -2086,9 +2117,9 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
 
     XRenderComposite(display_info->dpy, PictOpSrc,
                      cw->picture, None, picture,
-                     0, 0, 0, 0, 0, 0,
-                     WIN_ICON_SIZE,
-                     WIN_ICON_SIZE);
+                     0, 0, 0, 0, icon_x, icon_y,
+                     icon_width_x,
+                     icon_width_y);
 
     XRenderSetPictureTransform(display_info->dpy, cw->picture, &identity);
     XRenderSetPictureFilter(display_info->dpy, cw->picture, "fast", NULL, 0);

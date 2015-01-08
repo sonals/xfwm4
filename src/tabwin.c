@@ -325,44 +325,7 @@ tabwinSelectWidget (Tabwin *t)
     return tabwinGetSelected (t);
 }
 
-#if 0
-static GtkWidget *
-createWindowIcon (Client *c, gint icon_size)
-{
-    GdkPixbuf *icon_pixbuf;
-    GdkPixbuf *icon_pixbuf_stated;
-    GtkWidget *icon;
 
-    g_return_val_if_fail (c, NULL);
-    TRACE ("entering createWindowIcon");
-
-    icon_pixbuf = getAppIcon (c->screen_info->display_info, c->window, icon_size, icon_size);
-    icon_pixbuf_stated = NULL;
-    icon = gtk_image_new ();
-
-    if (icon_pixbuf)
-    {
-        if (FLAG_TEST (c->flags, CLIENT_FLAG_ICONIFIED))
-        {
-            icon_pixbuf_stated = gdk_pixbuf_copy (icon_pixbuf);
-            gdk_pixbuf_saturate_and_pixelate (icon_pixbuf, icon_pixbuf_stated, 0.55, TRUE);
-            gtk_image_set_from_pixbuf (GTK_IMAGE (icon), icon_pixbuf_stated);
-            g_object_unref(icon_pixbuf_stated);
-        }
-        else
-        {
-            gtk_image_set_from_pixbuf (GTK_IMAGE (icon), icon_pixbuf);
-        }
-        g_object_unref(icon_pixbuf);
-    }
-    else
-    {
-        gtk_image_set_from_stock (GTK_IMAGE (icon), "gtk-missing-image", GTK_ICON_SIZE_DIALOG);
-    }
-
-    return icon;
-}
-#else
 static GtkWidget *
 createWindowIcon (Client *c, gint icon_size)
 {
@@ -408,7 +371,7 @@ createWindowIcon (Client *c, gint icon_size)
 
     return icon;
 }
-#endif
+
 
 static int
 getMinMonitorWidth (ScreenInfo *screen_info)
