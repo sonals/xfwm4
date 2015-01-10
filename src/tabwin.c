@@ -61,16 +61,10 @@
 #include "tabwin.h"
 #include "settings.h"
 #include "compositor.h"
+#include "previews.h"
 
 static void tabwin_widget_class_init (TabwinWidgetClass *klass);
 
-static GdkPixbuf *getAppPreview (DisplayInfo *display_info, Client *c, int width, int height);
-
-GdkPixbuf *
-gdk_pixbuf_xlib_get_from_image (DisplayInfo *display_info,
-				XImage *image,
-				Colormap cmap, Visual *visual,
-				int width, int height);
 static GType
 tabwin_widget_get_type (void)
 {
@@ -1223,14 +1217,4 @@ tabwinDestroy (Tabwin *t)
         gtk_widget_destroy (GTK_WIDGET (tbw));
     }
     g_list_free (t->tabwin_list);
-}
-
-
-static GdkPixbuf *
-getAppPreview (DisplayInfo *display_info, Client *c, int width, int height)
-{
-    XImage *image;
-
-    image = compositorGetWindowPreview(display_info, c->frame);
-    return gdk_pixbuf_xlib_get_from_image(display_info, image, c->cmap, c->visual, width, height);
 }

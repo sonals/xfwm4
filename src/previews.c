@@ -25,27 +25,20 @@
 
 /* Ported to Xlib by John Harper <john@dcs.warwick.ac.uk> */
 
+/* Based on GTKs gdk-pixbuf-xlib-drawable.c */
+/* Aadapted for XFCE by Sonal Santan <sonal.santan@gmail.com> */
 
 #include "config.h"
-#include "display.h"
-#include "screen.h"
-#include <stdio.h>
-#include <string.h>
+#include "previews.h"
+#include "compositor.h"
 #include <glib.h>
 #include <gdk/gdk.h>
-#include <gtk/gtk.h>
 #include <X11/Xlib.h>
-#include <X11/Xutil.h>
 
-/*
+
 #if (G_BYTE_ORDER == G_LITTLE_ENDIAN)
 #define LITTLE
 #endif
-
-*/
-
-#define d(x)
-#define LITTLE
 
 
 
@@ -137,7 +130,7 @@ rgb1 (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colormap)
 	guint8 *o;
 	guint8 *srow = (guint8 *)image->data, *orow = pixels;
 
-	d (printf ("1 bits/pixel\n"));
+	TRACE("1 bits/pixel\n");
 
 	/* convert upto 8 pixels/time */
 	/* its probably not worth trying to make this run very fast, who uses
@@ -175,7 +168,7 @@ rgb1a (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colormap)
 	guint8 *srow = (guint8 *)image->data, *orow = pixels;
 	guint32 remap[2];
 
-	d (printf ("1 bits/pixel\n"));
+	TRACE("1 bits/pixel\n");
 
 	/* convert upto 8 pixels/time */
 	/* its probably not worth trying to make this run very fast, who uses
@@ -230,7 +223,7 @@ rgb8 (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colormap)
 	height = image->height;
 	bpl = image->bytes_per_line;
 
-	d (printf ("8 bit, no alpha output\n"));
+	TRACE("8 bit, no alpha output\n");
 
 	mask = mask_table[image->depth];
 
@@ -269,7 +262,7 @@ rgb8a (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colormap)
 	height = image->height;
 	bpl = image->bytes_per_line;
 
-	d (printf ("8 bit, with alpha output\n"));
+	TRACE("8 bit, with alpha output\n");
 
 	mask = mask_table[image->depth];
 
@@ -827,7 +820,7 @@ rgb888alsb (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colorma
 	height = image->height;
 	bpl = image->bytes_per_line;
 
-	d (printf ("32 bits/pixel with alpha\n"));
+	TRACE("32 bits/pixel with alpha\n");
 
 	/* lsb data */
 	for (yy = 0; yy < height; yy++) {
@@ -859,7 +852,7 @@ rgb888lsb (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colormap
 	height = image->height;
 	bpl = image->bytes_per_line;
 
-	d (printf ("32 bit, lsb, no alpha\n"));
+	TRACE("32 bit, lsb, no alpha\n");
 
 	for (yy = 0; yy < height; yy++) {
 		s = srow;
@@ -891,7 +884,7 @@ rgb888amsb (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colorma
 	guint8 *o;
 #endif
 
-	d (printf ("32 bit, msb, with alpha\n"));
+	TRACE("32 bit, msb, with alpha\n");
 
 	width = image->width;
 	height = image->height;
@@ -934,7 +927,7 @@ rgb888msb (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colormap
 	guint8 *s;
 	guint8 *o;
 
-	d (printf ("32 bit, msb, no alpha\n"));
+	TRACE("32 bit, msb, no alpha\n");
 
 	width = image->width;
 	height = image->height;
@@ -1104,139 +1097,17 @@ rgbconvert (XImage *image, guchar *pixels, int rowstride, int alpha, xlib_colorm
 	}
 }
 
+/*
+ * Based on original code in gdk_pixbuf_xlib_get_from_drawable()
+ */
 
-/* Exported functions */
-
-/**
- * gdk_pixbuf_xlib_get_from_drawable:
- * @dest: Destination pixbuf, or NULL if a new pixbuf should be created.
- * @src: Source drawable.
- * @cmap: A colormap if @src is a pixmap.  If it is a window, this argument will
- * be ignored.
- * @visual: A visual if @src is a pixmap.  If it is a window, this argument will
- * be ignored.
- * @src_x: Source X coordinate within drawable.
- * @src_y: Source Y coordinate within drawable.
- * @dest_x: Destination X coordinate in pixbuf, or 0 if @dest is NULL.
- * @dest_y: Destination Y coordinate in pixbuf, or 0 if @dest is NULL.
- * @width: Width in pixels of region to get.
- * @height: Height in pixels of region to get.
- *
- * Transfers image data from a Gdk drawable and converts it to an RGB(A)
- * representation inside a GdkPixbuf.
- *
- * If the drawable @src is a pixmap, then a suitable colormap must be specified,
- * since pixmaps are just blocks of pixel data without an associated colormap.
- * If the drawable is a window, the @cmap argument will be ignored and the
- * window's own colormap will be used instead.
- *
- * If the specified destination pixbuf @dest is #NULL, then this function will
- * create an RGB pixbuf with 8 bits per channel and no alpha, with the same size
- * specified by the @width and @height arguments.  In this case, the @dest_x and
- * @dest_y arguments must be specified as 0, otherwise the function will return
- * #NULL.  If the specified destination pixbuf is not NULL and it contains alpha
- * information, then the filled pixels will be set to full opacity.
- *
- * If the specified drawable is a pixmap, then the requested source rectangle
- * must be completely contained within the pixmap, otherwise the function will
- * return #NULL.
- *
- * If the specified drawable is a window, then it must be viewable, i.e. all of
- * its ancestors up to the root window must be mapped.  Also, the specified
- * source rectangle must be completely contained within the window and within
- * the screen.  If regions of the window are obscured by noninferior windows, the
- * contents of those regions are undefined.  The contents of regions obscured by
- * inferior windows of a different depth than that of the source window will also
- * be undefined.
- *
- * Return value: The same pixbuf as @dest if it was non-NULL, or a newly-created
- * pixbuf with a reference count of 1 if no destination pixbuf was specified; in
- * the latter case, NULL will be returned if not enough memory could be
- * allocated for the pixbuf to be created.
- **/
-GdkPixbuf *
-gdk_pixbuf_xlib_get_from_drawable (DisplayInfo *display_info,
-				   GdkPixbuf *dest,
-				   Drawable src,
-				   Colormap cmap, Visual *visual,
-				   int src_x, int src_y,
-				   int dest_x, int dest_y,
-				   int width, int height)
-{
-	guint src_width, src_height;
-	XImage *image;
-	int rowstride, bpp, alpha;
-	XWindowAttributes wa;
-	xlib_colormap *x_cmap;
-
-	/* General sanity checks */
-
-	g_return_val_if_fail (src != 0, NULL);
-
-	g_return_val_if_fail (cmap != 0, NULL);
-	g_return_val_if_fail (visual != NULL, NULL);
-
-	if (!dest)
-		g_return_val_if_fail (dest_x == 0 && dest_y == 0, NULL);
-	else {
-		g_return_val_if_fail (gdk_pixbuf_get_colorspace (dest) == GDK_COLORSPACE_RGB, NULL);
-		g_return_val_if_fail (gdk_pixbuf_get_n_channels (dest) == 3
-				      || gdk_pixbuf_get_n_channels (dest) == 4, NULL);
-		g_return_val_if_fail (gdk_pixbuf_get_bits_per_sample (dest) == 8, NULL);
-	}
-
-	if (dest) {
-		g_return_val_if_fail (dest_x >= 0 && dest_y >= 0, NULL);
-		g_return_val_if_fail (dest_x + width <= gdk_pixbuf_get_width (dest), NULL);
-		g_return_val_if_fail (dest_y + height <= gdk_pixbuf_get_height (dest), NULL);
-	}
-
-	/* Get Image in ZPixmap format (packed bits). */
-	image = XGetImage (display_info->dpy, src, src_x, src_y,
-			   width, height, AllPlanes, ZPixmap);
-	g_return_val_if_fail (image != NULL, NULL);
-
-	/* Create the pixbuf if needed */
-	if (!dest) {
-		dest = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
-				       TRUE, 8, width, height);
-		if (!dest) {
-			XDestroyImage (image);
-			return NULL;
-		}
-	}
-
-	/* Get the colormap if needed */
-
-	x_cmap = xlib_get_colormap (display_info, cmap, visual);
-
-	alpha = gdk_pixbuf_get_has_alpha (dest);
-	rowstride = gdk_pixbuf_get_rowstride (dest);
-	bpp = alpha ? 4 : 3;
-
-	/* we offset into the image data based on the position we are retrieving from */
-	rgbconvert (image, gdk_pixbuf_get_pixels (dest) +
-		    (dest_y * rowstride) + (dest_x * bpp),
-		    rowstride,
-		    alpha,
-		    x_cmap);
-
-	xlib_colormap_free (x_cmap);
-	XDestroyImage (image);
-
-	return dest;
-}
-
-
-
-GdkPixbuf *
+static GdkPixbuf *
 gdk_pixbuf_xlib_get_from_image (DisplayInfo *display_info,
 				XImage *image,
 				Colormap cmap, Visual *visual,
 				int width, int height)
 {
-	guint src_width, src_height;
-	int rowstride, bpp, alpha;
+	int rowstride, alpha;
 	xlib_colormap *x_cmap;
 	GdkPixbuf *dest;
 	/* General sanity checks */
@@ -1254,7 +1125,6 @@ gdk_pixbuf_xlib_get_from_image (DisplayInfo *display_info,
 
 	alpha = gdk_pixbuf_get_has_alpha (dest);
 	rowstride = gdk_pixbuf_get_rowstride (dest);
-	bpp = alpha ? 4 : 3;
 
 	/* we offset into the image data based on the position we are retrieving from */
 	rgbconvert (image, gdk_pixbuf_get_pixels (dest),
@@ -1264,4 +1134,14 @@ gdk_pixbuf_xlib_get_from_image (DisplayInfo *display_info,
 
 	xlib_colormap_free (x_cmap);
 	return dest;
+}
+
+
+GdkPixbuf *
+getAppPreview (DisplayInfo *display_info, Client *c, int width, int height)
+{
+    XImage *image;
+
+    image = compositorGetWindowPreview(display_info, c->frame);
+    return gdk_pixbuf_xlib_get_from_image(display_info, image, c->cmap, c->visual, width, height);
 }

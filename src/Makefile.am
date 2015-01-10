@@ -70,7 +70,8 @@ xfwm4_SOURCES =								\
 	xsync.c								\
 	xsync.h								\
 	xpm-color-table.h						\
-	gdk-pixbuf-xlib-drawable.c
+	previews.c							\
+	previews.h
 
 xfwm4_CFLAGS =								\
 	$(GTK_CFLAGS) 							\
