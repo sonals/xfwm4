@@ -563,21 +563,3 @@ getAppIcon (DisplayInfo *display_info, Window window, int width, int height)
 
     return inline_icon_at_size (default_icon_data, width, height);
 }
-
-
-GdkPixbuf *
-getAppPreview (DisplayInfo *display_info, Window window, int width, int height, const char *name)
-{
-    XImage *image;
-    GdkPixbuf *pixbuf;
-    GdkImage *preview_val;
-    Pixmap preview_pixmap;
-    char file_name[128];
-    unsigned long xpixel;
-    guchar *pixels, *p;
-    int x, y;
-    int row_stride, n_channels;
-    guchar temp;
-
-    return compositorGetWindowPreview(display_info, window);
-}

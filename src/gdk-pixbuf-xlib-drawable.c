@@ -1226,3 +1226,42 @@ gdk_pixbuf_xlib_get_from_drawable (DisplayInfo *display_info,
 
 	return dest;
 }
+
+
+
+GdkPixbuf *
+gdk_pixbuf_xlib_get_from_image (DisplayInfo *display_info,
+				XImage *image,
+				Colormap cmap, Visual *visual,
+				int width, int height)
+{
+	guint src_width, src_height;
+	int rowstride, bpp, alpha;
+	xlib_colormap *x_cmap;
+	GdkPixbuf *dest;
+	/* General sanity checks */
+
+	g_return_val_if_fail (image != 0, NULL);
+	g_return_val_if_fail (cmap != 0, NULL);
+	g_return_val_if_fail (visual != NULL, NULL);
+
+	/* Create the pixbuf if needed */
+	dest = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
+			       TRUE, 8, width, height);
+	/* Get the colormap if needed */
+
+	x_cmap = xlib_get_colormap (display_info, cmap, visual);
+
+	alpha = gdk_pixbuf_get_has_alpha (dest);
+	rowstride = gdk_pixbuf_get_rowstride (dest);
+	bpp = alpha ? 4 : 3;
+
+	/* we offset into the image data based on the position we are retrieving from */
+	rgbconvert (image, gdk_pixbuf_get_pixels (dest),
+		    rowstride,
+		    alpha,
+		    x_cmap);
+
+	xlib_colormap_free (x_cmap);
+	return dest;
+}

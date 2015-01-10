@@ -64,6 +64,13 @@
 
 static void tabwin_widget_class_init (TabwinWidgetClass *klass);
 
+static GdkPixbuf *getAppPreview (DisplayInfo *display_info, Client *c, int width, int height);
+
+GdkPixbuf *
+gdk_pixbuf_xlib_get_from_image (DisplayInfo *display_info,
+				XImage *image,
+				Colormap cmap, Visual *visual,
+				int width, int height);
 static GType
 tabwin_widget_get_type (void)
 {
@@ -332,15 +339,11 @@ createWindowIcon (Client *c, gint icon_size)
     GdkPixbuf *icon_pixbuf;
     GdkPixbuf *icon_pixbuf_stated;
     GtkWidget *icon;
-    XImage *preview_image;
-    GdkPixmap *gdk_pixmap;
-    GdkImage *preview_val;
-    Pixmap preview_pixmap;
 
     g_return_val_if_fail (c, NULL);
     DBG ("entering createWindowIcon");
 
-    icon_pixbuf = getAppPreview(c->screen_info->display_info, c->frame, icon_size, icon_size, c->name);
+    icon_pixbuf = getAppPreview(c->screen_info->display_info, c, icon_size, icon_size);
     icon = gtk_image_new ();
 
     if (!icon_pixbuf)
@@ -1220,4 +1223,14 @@ tabwinDestroy (Tabwin *t)
         gtk_widget_destroy (GTK_WIDGET (tbw));
     }
     g_list_free (t->tabwin_list);
+}
+
+
+static GdkPixbuf *
+getAppPreview (DisplayInfo *display_info, Client *c, int width, int height)
+{
+    XImage *image;
+
+    image = compositorGetWindowPreview(display_info, c->frame);
+    return gdk_pixbuf_xlib_get_from_image(display_info, image, c->cmap, c->visual, width, height);
 }

@@ -155,7 +155,7 @@ struct _CWindow
 
     guint opacity;
 
-    GdkPixbuf *preview;
+    XImage *preview;
     Pixmap preview_pixmap;
 };
 
@@ -763,7 +763,7 @@ free_win_data (CWindow *cw, gboolean delete)
 
     if (delete && cw->preview)
     {
-        g_object_unref(cw->preview);
+        XDestroyImage(cw->preview);
         cw->preview = NULL;
     }
 
@@ -2128,19 +2128,21 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderSetPictureFilter(display_info->dpy, cw->picture, "fast", NULL, 0);
 
     DBG("gdk_pixbuf_xlib_get_from_drawable: %s %x %x %p", cw->c->name, cw->preview_pixmap, cw->c->cmap, cw->c->visual);
+
     if (cw->preview)
     {
-        g_object_unref(cw->preview);
+        XDestroyImage(cw->preview);
     }
-    cw->preview = gdk_pixbuf_xlib_get_from_drawable(display_info, NULL, cw->preview_pixmap, cw->c->cmap, cw->c->visual, 0, 0, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
-    g_object_ref(cw->preview);
+
+    cw->preview = XGetImage (display_info->dpy, cw->preview_pixmap, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE, AllPlanes, ZPixmap);
+
     DBG("gdk_pixbuf_xlib_get_from_drawable %p", cw->preview);
     XRenderFreePicture(display_info->dpy, picture);
 #endif /* HAVE_COMPOSITOR */
 }
 
 
-static GdkPixbuf *
+static XImage *
 win_preview(DisplayInfo *display_info, CWindow *cw)
 {
 #ifdef HAVE_COMPOSITOR
@@ -3777,7 +3779,7 @@ compositorTestServer (DisplayInfo *display_info)
 #endif /* HAVE_COMPOSITOR */
 }
 
-GdkPixbuf *
+XImage *
 compositorGetWindowPreview(DisplayInfo *display_info, Window id)
 {
 #ifdef HAVE_COMPOSITOR
