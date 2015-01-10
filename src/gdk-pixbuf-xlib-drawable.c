@@ -837,7 +837,7 @@ rgb888alsb (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colorma
 			*o++ = s[2];
 			*o++ = s[1];
 			*o++ = s[0];
-			*o++ = 0xff;
+			*o++ = s[3];
 			s += 4;
 		}
 		srow += bpl;
@@ -911,7 +911,7 @@ rgb888amsb (XImage *image, guchar *pixels, int rowstride, xlib_colormap *colorma
 			*o++ = s[1];
 			*o++ = s[2];
 			*o++ = s[3];
-			*o++ = 0xff;
+			*o++ = s[0];
 			s += 4;
 #else
 			*o++ = (*s << 8) | 0xff; /* untested */
@@ -1050,8 +1050,8 @@ rgbconvert (XImage *image, guchar *pixels, int rowstride, int alpha, xlib_colorm
 	int bank=5;		/* default fallback converter */
 	Visual *v = cmap->visual;
 
-	TRACE("masks = %x:%x:%x\n", v->red_mask, v->green_mask, v->blue_mask);
-	TRACE("image depth = %d, bpp = %d\n", image->depth, image->bits_per_pixel);
+	DBG("masks = %x:%x:%x\n", v->red_mask, v->green_mask, v->blue_mask);
+	DBG("image depth = %d, bpp = %d\n", image->depth, image->bits_per_pixel);
 
 	switch (v->class) {
 				/* I assume this is right for static & greyscale's too? */
@@ -1093,12 +1093,13 @@ rgbconvert (XImage *image, guchar *pixels, int rowstride, int alpha, xlib_colorm
 		break;
 	}
 
-	d(printf("converting using conversion function in bank %d\n", bank));
+	DBG("converting using conversion function in bank %d\n", bank);
 
 	if (bank==5) {
 		convert_real_slow(image, pixels, rowstride, cmap, alpha);
 	} else {
 		index |= bank << 2;
+		DBG("converting using conversion function in bank %d, index = %d\n", bank, index);
 		(* convert_map[index]) (image, pixels, rowstride, cmap);
 	}
 }
@@ -1198,7 +1199,7 @@ gdk_pixbuf_xlib_get_from_drawable (DisplayInfo *display_info,
 	/* Create the pixbuf if needed */
 	if (!dest) {
 		dest = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
-				       FALSE, 8, width, height);
+				       TRUE, 8, width, height);
 		if (!dest) {
 			XDestroyImage (image);
 			return NULL;

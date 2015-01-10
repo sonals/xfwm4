@@ -2133,6 +2133,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
         g_object_unref(cw->preview);
     }
     cw->preview = gdk_pixbuf_xlib_get_from_drawable(display_info, NULL, cw->preview_pixmap, cw->c->cmap, cw->c->visual, 0, 0, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
+    g_object_ref(cw->preview);
     DBG("gdk_pixbuf_xlib_get_from_drawable %p", cw->preview);
     XRenderFreePicture(display_info->dpy, picture);
 #endif /* HAVE_COMPOSITOR */
