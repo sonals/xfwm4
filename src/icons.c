@@ -573,35 +573,11 @@ getAppPreview (DisplayInfo *display_info, Window window, int width, int height, 
     GdkImage *preview_val;
     Pixmap preview_pixmap;
     char file_name[128];
-    image = compositorGetWindowPreview(display_info, window);
+    unsigned long xpixel;
+    guchar *pixels, *p;
+    int x, y;
+    int row_stride, n_channels;
+    guchar temp;
 
-    if (!image)
-    {
-        return NULL;
-    }
-    DBG ("%s: preview image = %p, bits_per_sample = 0x%x, depth = 0x%x, bytes_per_line = 0x%x\nheight = 0x%x, width = 0x%x\n",
-         name, image, image->bitmap_unit, image->depth, image->bytes_per_line,
-         image->height, image->width);
-
-    pixbuf = gdk_pixbuf_new_from_data ((guchar *) image->data,
-                                       GDK_COLORSPACE_RGB,
-                                       TRUE,
-                                       8,
-                                       image->width,
-                                       image->height,
-                                       image->bytes_per_line,
-                                       NULL,
-                                       NULL);
-
-#if 0
-    sprintf(file_name, "/tmp/%s.dat", name);
-    FILE *file = fopen(file_name, "w+");
-    if (file)
-    {
-        DBG("Writing image data to %s", file_name);
-        fwrite(image->data, 1, image->bytes_per_line * image->height, file);
-        fclose(file);
-    }
-#endif
-    return pixbuf;
+    return compositorGetWindowPreview(display_info, window);
 }

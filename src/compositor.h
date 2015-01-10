@@ -74,10 +74,7 @@ void                     compositorWindowSetOpacity             (DisplayInfo *,
 void                     compositorRebuildScreen                (ScreenInfo *);
 gboolean                 compositorTestServer                   (DisplayInfo *);
 
-XImage                  *compositorGetWindowPreview             (DisplayInfo *,
-                                                                 Window);
-
-Pixmap                   compositorGetWindowPreviewPixmap       (DisplayInfo *,
+GdkPixbuf               *compositorGetWindowPreview             (DisplayInfo *,
                                                                  Window);
 
 #endif /* INC_COMPOSITOR_H */

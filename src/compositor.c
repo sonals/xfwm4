@@ -30,7 +30,6 @@
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/shape.h>
-
 #include <glib.h>
 #include <math.h>
 #include <string.h>
@@ -107,6 +106,15 @@
 #define WIN_ICON_SIZE 192
 #endif
 
+GdkPixbuf *
+gdk_pixbuf_xlib_get_from_drawable (DisplayInfo *display_info,
+				   GdkPixbuf *dest,
+				   Drawable src,
+				   Colormap cmap, Visual *visual,
+				   int src_x, int src_y,
+				   int dest_x, int dest_y,
+				   int width, int height);
+
 typedef struct _CWindow CWindow;
 struct _CWindow
 {
@@ -147,7 +155,7 @@ struct _CWindow
 
     guint opacity;
 
-    XImage *preview;
+    GdkPixbuf *preview;
     Pixmap preview_pixmap;
 };
 
@@ -747,16 +755,16 @@ free_win_data (CWindow *cw, gboolean delete)
     }
 #endif
 
-    if (delete && cw->preview)
-    {
-        XDestroyImage(cw->preview);
-        cw->preview = NULL;
-    }
-
     if (delete && cw->preview_pixmap)
     {
         XFreePixmap (display_info->dpy, cw->preview_pixmap);
         cw->preview_pixmap = None;
+    }
+
+    if (delete && cw->preview)
+    {
+        g_object_unref(cw->preview);
+        cw->preview = NULL;
     }
 
     if (cw->picture)
@@ -1979,7 +1987,7 @@ map_win (CWindow *cw)
     DisplayInfo *display_info;
 
     g_return_if_fail (cw != NULL);
-    TRACE ("entering map_win 0x%lx", cw->id);
+    DBG ("entering map_win 0x%lx", cw->id);
 
     screen_info = cw->screen_info;
     display_info = screen_info->display_info;
@@ -2035,7 +2043,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderPictFormat *format;
     XRenderPictureAttributes pa;
     Picture picture;
-    double scale_x, scale_y, scale;
+    double scale;
     int icon_x, icon_y;
     int icon_width_x, icon_width_y;
     XTransform xform;
@@ -2102,12 +2110,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
         icon_x = ((double)WIN_ICON_SIZE - (double) cw->attr.width / scale) / 2.0;
         icon_width_x = (double) cw->attr.width / scale;
     }
-    /*
-    scale_x = cw->attr.width / (double)WIN_ICON_SIZE;
-    scale_y = cw->attr.height / (double)WIN_ICON_SIZE;
-    xform.matrix[0][0] = XDoubleToFixed(scale_x);
-    xform.matrix[1][1] = XDoubleToFixed(scale_y);
-    */
+
     xform.matrix[0][0] = XDoubleToFixed(scale);
     xform.matrix[1][1] = XDoubleToFixed(scale);
     xform.matrix[2][2] = XDoubleToFixed(1.0);
@@ -2124,18 +2127,19 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderSetPictureTransform(display_info->dpy, cw->picture, &identity);
     XRenderSetPictureFilter(display_info->dpy, cw->picture, "fast", NULL, 0);
 
+    DBG("gdk_pixbuf_xlib_get_from_drawable: %s %x %x %p", cw->c->name, cw->preview_pixmap, cw->c->cmap, cw->c->visual);
     if (cw->preview)
     {
-        XDestroyImage(cw->preview);
+        g_object_unref(cw->preview);
     }
-    cw->preview = XGetImage(display_info->dpy, cw->preview_pixmap, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE, AllPlanes, ZPixmap);
-
+    cw->preview = gdk_pixbuf_xlib_get_from_drawable(display_info, NULL, cw->preview_pixmap, cw->c->cmap, cw->c->visual, 0, 0, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
+    DBG("gdk_pixbuf_xlib_get_from_drawable %p", cw->preview);
     XRenderFreePicture(display_info->dpy, picture);
 #endif /* HAVE_COMPOSITOR */
 }
 
 
-static XImage *
+static GdkPixbuf *
 win_preview(DisplayInfo *display_info, CWindow *cw)
 {
 #ifdef HAVE_COMPOSITOR
@@ -2149,7 +2153,6 @@ win_preview(DisplayInfo *display_info, CWindow *cw)
     return NULL;
 #endif
 }
-
 
 static void
 unmap_win (CWindow *cw)
@@ -3773,13 +3776,11 @@ compositorTestServer (DisplayInfo *display_info)
 #endif /* HAVE_COMPOSITOR */
 }
 
-
-XImage *
+GdkPixbuf *
 compositorGetWindowPreview(DisplayInfo *display_info, Window id)
 {
 #ifdef HAVE_COMPOSITOR
     CWindow *cw = None;
-
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (id != None);
     DBG ("entering for 0x%lx", id);
@@ -3798,40 +3799,5 @@ compositorGetWindowPreview(DisplayInfo *display_info, Window id)
     return NULL;
 #else /* HAVE_COMPOSITOR */
     return NULL;
-#endif
-}
-
-
-Pixmap
-compositorGetWindowPreviewPixmap(DisplayInfo *display_info, Window id)
-{
-#ifdef HAVE_COMPOSITOR
-    CWindow *cw = None;
-
-    g_return_if_fail (display_info != NULL);
-    g_return_if_fail (id != None);
-    DBG ("entering for 0x%lx", id);
-
-    if (!compositorIsUsable (display_info))
-    {
-        return None;
-    }
-
-    cw = find_cwindow_in_display (display_info, id);
-
-    if (!cw)
-    {
-        DBG ("could not find 0x%lx", id);
-        return None;
-    }
-
-    if (cw->viewable)
-    {
-        update_win_preview(display_info, cw);
-    }
-
-    return cw->preview_pixmap;
-#else /* HAVE_COMPOSITOR */
-    return None;
 #endif
 }
