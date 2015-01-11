@@ -198,6 +198,7 @@ struct _XfwmParams
     int title_shadow[2];
     int wrap_resistance;
     gboolean borderless_maximize;
+    gboolean titleless_maximize;
     gboolean box_move;
     gboolean box_resize;
     gboolean click_to_focus;
@@ -215,7 +216,6 @@ struct _XfwmParams
     gboolean raise_on_focus;
     gboolean raise_with_any_button;
     gboolean repeat_urgent_blink;
-    gboolean restore_on_move;
     gboolean scroll_workspaces;
     gboolean show_app_icon;
     gboolean show_dock_shadow;

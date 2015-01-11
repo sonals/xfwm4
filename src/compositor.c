@@ -18,7 +18,7 @@
 
         xcompmgr - (c) 2003 Keith Packard
         metacity - (c) 2003, 2004 Red Hat, Inc.
-        xfwm4    - (c) 2005-2011 Olivier Fourdan
+        xfwm4    - (c) 2005-2014 Olivier Fourdan
 
 */
 
@@ -153,10 +153,9 @@ struct _CWindow
     gint shadow_width;
     gint shadow_height;
 
-    guint opacity;
-
     XImage *preview;
     Pixmap preview_pixmap;
+    guint32 opacity;
 };
 
 static CWindow*
@@ -997,7 +996,7 @@ win_extents (CWindow *cw)
               WIN_IS_DOCK(cw) &&
               !WIN_NO_SHADOW(cw) &&
               !WIN_IS_OVERRIDE(cw) &&
-              (!(WIN_IS_ARGB(cw) || WIN_IS_SHAPED(cw)))))
+              (!WIN_IS_SHAPED(cw))))
     {
         XRectangle sr;
 
@@ -1417,9 +1416,9 @@ paint_all (ScreenInfo *screen_info, XserverRegion region)
         g_return_if_fail (screen_info->rootBuffer != None);
 
         memset(screen_info->transform.matrix, 0, 9);
-        screen_info->transform.matrix[0][0] = 1<<16;
-        screen_info->transform.matrix[1][1] = 1<<16;
-        screen_info->transform.matrix[2][2] = 1<<16;
+        screen_info->transform.matrix[0][0] = 1 << 16;
+        screen_info->transform.matrix[1][1] = 1 << 16;
+        screen_info->transform.matrix[2][2] = 1 << 16;
         screen_info->zoomed = 0;
     }
 
@@ -1512,7 +1511,7 @@ paint_all (ScreenInfo *screen_info, XserverRegion region)
 
         if (cw->shadow)
         {
-            shadowClip = XFixesCreateRegion(dpy, NULL, 0);
+            shadowClip = XFixesCreateRegion (dpy, NULL, 0);
             XFixesSubtractRegion (dpy, shadowClip, cw->borderClip, cw->borderSize);
 
             XFixesSetPictureClipRegion (dpy, screen_info->rootBuffer, 0, 0, shadowClip);
@@ -1551,7 +1550,7 @@ paint_all (ScreenInfo *screen_info, XserverRegion region)
     }
 
     TRACE ("Copying data back to screen");
-    if(screen_info->zoomed)
+    if (screen_info->zoomed)
     {
         /* Fixme: copy back whole screen if zoomed
            It would be better to scale the clipping region if possible. */
@@ -1954,7 +1953,7 @@ expose_area (ScreenInfo *screen_info, XRectangle *rects, gint nrects)
 }
 
 static void
-set_win_opacity (CWindow *cw, guint opacity)
+set_win_opacity (CWindow *cw, guint32 opacity)
 {
     DisplayInfo *display_info;
     ScreenInfo *screen_info;
@@ -1994,7 +1993,7 @@ map_win (CWindow *cw)
 
     if (!WIN_IS_REDIRECTED(cw))
     {
-        cw->fulloverlay = is_fullscreen(cw);
+        cw->fulloverlay = is_fullscreen (cw);
         if (cw->fulloverlay)
         {
             /*
@@ -2023,7 +2022,7 @@ map_win (CWindow *cw)
     /* Check for new windows to un-redirect. */
     if (WIN_HAS_DAMAGE(cw) && WIN_IS_OVERRIDE(cw) &&
         WIN_IS_NATIVE_OPAQUE(cw) && WIN_IS_REDIRECTED(cw) && !WIN_IS_SHAPED(cw)
-        && ((screen_info->wins_unredirected > 0) || is_fullscreen(cw)))
+        && ((screen_info->wins_unredirected > 0) || is_fullscreen (cw)))
     {
         /* Make those opaque, we don't want them to be transparent */
         cw->opacity = NET_WM_OPAQUE;
@@ -2223,7 +2222,7 @@ init_opacity (CWindow *cw)
     DisplayInfo *display_info;
     Client *c;
 
-    TRACE ("set_opacity");
+    TRACE ("init_opacity");
     g_return_if_fail (cw != NULL);
 
     screen_info = cw->screen_info;
@@ -2260,8 +2259,14 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
 
     DBG ("entering add_win: 0x%lx", id);
 
-    new = g_new0 (CWindow, 1);
+    new = find_cwindow_in_display (display_info, id);
+    if (new)
+    {
+        TRACE ("Window 0x%lx already added", id);
+        return;
+    }
 
+    new = g_new0 (CWindow, 1);
     myDisplayGrabServer (display_info);
     if (!XGetWindowAttributes (display_info->dpy, id, &new->attr))
     {
@@ -2605,25 +2610,25 @@ static void
 recenter_zoomed_area (ScreenInfo *screen_info, int x_root, int y_root)
 {
     int zf = screen_info->transform.matrix[0][0];
-    double zoom = XFixedToDouble(zf);
+    double zoom = XFixedToDouble (zf);
     Display *dpy = screen_info->display_info->dpy;
 
-    if(screen_info->zoomed)
+    if (screen_info->zoomed)
     {
-        int xp = x_root * (1-zoom);
-        int yp = y_root * (1-zoom);
-        screen_info->transform.matrix[0][2] = (xp<<16);
-        screen_info->transform.matrix[1][2] = (yp<<16);
+        int xp = x_root * (1 - zoom);
+        int yp = y_root * (1 - zoom);
+        screen_info->transform.matrix[0][2] = (xp << 16);
+        screen_info->transform.matrix[1][2] = (yp << 16);
     }
 
-    if(zf > (1<<14) && zf < (1<<16))
-        XRenderSetPictureFilter(dpy, screen_info->rootBuffer, "bilinear", NULL, 0);
+    if (zf > (1 << 14) && zf < (1 << 16))
+        XRenderSetPictureFilter (dpy, screen_info->rootBuffer, "bilinear", NULL, 0);
     else
-        XRenderSetPictureFilter(dpy, screen_info->rootBuffer, "nearest", NULL, 0);
+        XRenderSetPictureFilter (dpy, screen_info->rootBuffer, "nearest", NULL, 0);
 
-    XRenderSetPictureTransform(dpy, screen_info->rootBuffer, &screen_info->transform);
+    XRenderSetPictureTransform (dpy, screen_info->rootBuffer, &screen_info->transform);
 
-    damage_screen(screen_info);
+    damage_screen (screen_info);
 }
 
 static gboolean
@@ -2635,11 +2640,11 @@ zoom_timeout_cb (gpointer data)
     int          x_root, y_root;
     int          x_win, y_win;
     unsigned int mask;
-    static int   x_old=-1, y_old=-1;
+    static int   x_old = -1, y_old = -1;
 
     screen_info = (ScreenInfo *) data;
 
-    if(!screen_info->zoomed)
+    if (!screen_info->zoomed)
     {
         screen_info->zoom_timeout_id = 0;
         return FALSE; /* stop calling this callback */
@@ -2648,10 +2653,10 @@ zoom_timeout_cb (gpointer data)
     XQueryPointer (screen_info->display_info->dpy, screen_info->xroot,
 			    &root_return, &child_return,
 			    &x_root, &y_root, &x_win, &y_win, &mask);
-    if(x_old != x_root || y_old != y_root)
+    if (x_old != x_root || y_old != y_root)
     {
         x_old = x_root; y_old = y_root;
-        recenter_zoomed_area(screen_info, x_root, y_root);
+        recenter_zoomed_area (screen_info, x_root, y_root);
     }
     return TRUE;
 }
@@ -3220,34 +3225,31 @@ void
 compositorZoomIn (ScreenInfo *screen_info, XButtonEvent *ev)
 {
 #ifdef HAVE_COMPOSITOR
-    /* don't do anything if the user disabled the zoom feature */
-    if (!screen_info->params->zoom_desktop)
-        return;
-
     screen_info->transform.matrix[0][0] -= 4096;
     screen_info->transform.matrix[1][1] -= 4096;
 
-    if(screen_info->transform.matrix[0][0] < (1<<10))
+    if (screen_info->transform.matrix[0][0] < (1 << 10))
     {
-        screen_info->transform.matrix[0][0] = (1<<10);
-        screen_info->transform.matrix[1][1] = (1<<10);
+        screen_info->transform.matrix[0][0] = (1 << 10);
+        screen_info->transform.matrix[1][1] = (1 << 10);
     }
 
     screen_info->zoomed = 1;
-    if(!screen_info->zoom_timeout_id)
+    if (!screen_info->zoom_timeout_id)
     {
         int timeout_rate = 30; /* per second */
 #ifdef HAVE_RANDR
         if (screen_info->display_info->have_xrandr)
         {
-            timeout_rate = screen_info->refresh_rate/2;
-            if(timeout_rate < 1)
+            timeout_rate = screen_info->refresh_rate / 2;
+            if (timeout_rate < 1)
                 timeout_rate = 30;
         }
 #endif /* HAVE_RANDR */
-        screen_info->zoom_timeout_id = g_timeout_add ((1000/timeout_rate), zoom_timeout_cb, screen_info);
+        screen_info->zoom_timeout_id = g_timeout_add ((1000 / timeout_rate),
+                                                      zoom_timeout_cb, screen_info);
     }
-    recenter_zoomed_area(screen_info, ev->x_root, ev->y_root);
+    recenter_zoomed_area (screen_info, ev->x_root, ev->y_root);
 #endif /* HAVE_COMPOSITOR */
 }
 
@@ -3256,23 +3258,20 @@ compositorZoomOut (ScreenInfo *screen_info, XButtonEvent *ev)
 {
 #ifdef HAVE_COMPOSITOR
     /* don't do anything if the user disabled the zoom feature */
-    if (!screen_info->params->zoom_desktop)
-        return;
-
-    if(screen_info->zoomed)
+    if (screen_info->zoomed)
     {
         screen_info->transform.matrix[0][0] += 4096;
         screen_info->transform.matrix[1][1] += 4096;
 
-        if(screen_info->transform.matrix[0][0] >= (1<<16))
+        if (screen_info->transform.matrix[0][0] >= (1 << 16))
         {
-            screen_info->transform.matrix[0][0] = (1<<16);
-            screen_info->transform.matrix[1][1] = (1<<16);
+            screen_info->transform.matrix[0][0] = (1 << 16);
+            screen_info->transform.matrix[1][1] = (1 << 16);
             screen_info->zoomed = 0;
             screen_info->transform.matrix[0][2] = 0;
             screen_info->transform.matrix[1][2] = 0;
         }
-        recenter_zoomed_area(screen_info, ev->x_root, ev->y_root);
+        recenter_zoomed_area (screen_info, ev->x_root, ev->y_root);
     }
 #endif /* HAVE_COMPOSITOR */
 }
@@ -3714,7 +3713,7 @@ compositorUpdateScreenSize (ScreenInfo *screen_info)
 }
 
 void
-compositorWindowSetOpacity (DisplayInfo *display_info, Window id, guint opacity)
+compositorWindowSetOpacity (DisplayInfo *display_info, Window id, guint32 opacity)
 {
 #ifdef HAVE_COMPOSITOR
     CWindow *cw;

@@ -17,7 +17,7 @@
 
 
         oroborus - (c) 2001 Ken Lynch
-        xfwm4    - (c) 2002-2011 Olivier Fourdan
+        xfwm4    - (c) 2002-2015 Olivier Fourdan
 
  */
 
@@ -44,7 +44,6 @@ typedef struct
     xfwmPixmap pm_title;
     xfwmPixmap pm_sides[SIDE_COUNT];
 } FramePixmap;
-
 
 int
 frameDecorationLeft (ScreenInfo *screen_info)
@@ -90,7 +89,7 @@ frameLeft (Client * c)
     g_return_val_if_fail (c != NULL, 0);
     if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
         && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN)
-        && (!FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        && (!FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
             || !(c->screen_info->params->borderless_maximize)))
     {
         return c->screen_info->sides[SIDE_LEFT][ACTIVE].width;
@@ -106,7 +105,7 @@ frameRight (Client * c)
     g_return_val_if_fail (c != NULL, 0);
     if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
         && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN)
-        && (!FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        && (!FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
             || !(c->screen_info->params->borderless_maximize)))
     {
         return c->screen_info->sides[SIDE_RIGHT][ACTIVE].width;
@@ -120,8 +119,7 @@ frameTop (Client * c)
     TRACE ("entering frameTop");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
-        && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN))
+    if (CLIENT_HAS_TITLE (c))
     {
         return c->screen_info->title[TITLE_3][ACTIVE].height;
     }
@@ -136,7 +134,7 @@ frameBottom (Client * c)
     g_return_val_if_fail (c != NULL, 0);
     if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
         && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN)
-        && (!FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        && (!FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
             || !(c->screen_info->params->borderless_maximize)))
     {
         return c->screen_info->sides[SIDE_BOTTOM][ACTIVE].height;
@@ -152,7 +150,7 @@ frameX (Client * c)
     g_return_val_if_fail (c != NULL, 0);
     if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
         && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN)
-        && (!FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        && (!FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
             || !(c->screen_info->params->borderless_maximize)))
     {
         return c->x - frameLeft (c);
@@ -182,7 +180,7 @@ frameWidth (Client * c)
     g_return_val_if_fail (c != NULL, 0);
     if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
         && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN)
-        && (!FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        && (!FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
             || !(c->screen_info->params->borderless_maximize)))
     {
         return c->width + frameLeft (c) + frameRight (c);
@@ -216,7 +214,7 @@ frameExtentLeft (Client * c)
     TRACE ("entering frameExtentLeft");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return -c->frame_extents[SIDE_LEFT];
     }
@@ -229,7 +227,7 @@ frameExtentRight (Client * c)
     TRACE ("entering frameExtentRight");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return -c->frame_extents[SIDE_RIGHT];
     }
@@ -242,7 +240,7 @@ frameExtentTop (Client * c)
     TRACE ("entering frameExtentTop");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return -c->frame_extents[SIDE_TOP];
     }
@@ -255,7 +253,7 @@ frameExtentBottom (Client * c)
     TRACE ("entering frameExtentBottom");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return -c->frame_extents[SIDE_BOTTOM];
     }
@@ -268,7 +266,7 @@ frameExtentX (Client * c)
     TRACE ("entering frameExtentX");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return c->x + c->frame_extents[SIDE_LEFT];
     }
@@ -281,7 +279,7 @@ frameExtentY (Client * c)
     TRACE ("entering frameExtentY");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return c->y + c->frame_extents[SIDE_TOP];
     }
@@ -294,7 +292,7 @@ frameExtentWidth (Client * c)
     TRACE ("entering frameExtentWidth");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return MAX (0, c->width - c->frame_extents[SIDE_LEFT]
                                 - c->frame_extents[SIDE_RIGHT]);
@@ -308,7 +306,7 @@ frameExtentHeight (Client * c)
     TRACE ("entering frameExtentHeight");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (c->has_frame_extents)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_HAS_FRAME_EXTENTS))
     {
         return MAX (0, c->height - c->frame_extents[SIDE_TOP]
                                  - c->frame_extents[SIDE_BOTTOM]);
@@ -322,7 +320,7 @@ frameTopLeftWidth (Client * c, int state)
     TRACE ("entering frameTopLeftWidth");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
         && c->screen_info->params->borderless_maximize)
     {
         return 0;
@@ -337,7 +335,7 @@ frameTopRightWidth (Client * c, int state)
     TRACE ("entering frameTopRightWidth");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
         && c->screen_info->params->borderless_maximize)
     {
         return 0;
@@ -351,7 +349,7 @@ frameButtonOffset (Client *c)
     TRACE ("entering frameButtonOffset");
 
     g_return_val_if_fail (c != NULL, 0);
-    if (FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+    if (FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
         && c->screen_info->params->borderless_maximize)
     {
         return MAX (0, c->screen_info->params->maximized_offset);
@@ -1060,8 +1058,7 @@ frameDrawWin (Client * c)
         }
     }
 
-    if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER)
-        && !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN))
+    if (CLIENT_HAS_TITLE (c))
     {
         /* First, hide the buttons that we don't have... */
         for (i = 0; i < BUTTON_COUNT; i++)
@@ -1183,7 +1180,7 @@ frameDrawWin (Client * c)
                 &screen_info->corners[CORNER_BOTTOM_RIGHT][state]);
         }
 
-        if (FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        if (FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
             && (c->screen_info->params->borderless_maximize))
         {
             xfwmWindowHide (&c->sides[SIDE_LEFT]);

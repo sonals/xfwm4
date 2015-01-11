@@ -17,7 +17,7 @@
 
 
         oroborus - (c) 2001 Ken Lynch
-        xfwm4    - (c) 2002-2011 Olivier Fourdan
+        xfwm4    - (c) 2002-2015 Olivier Fourdan
 
  */
 
@@ -801,11 +801,14 @@ titleButton (Client * c, guint state, XButtonEvent * ev)
     else if (ev->button == Button4)
     {
         /* Mouse wheel scroll up */
-        if (state == AltMask)
+#ifdef HAVE_COMPOSITOR
+        if ((state) && (state == screen_info->params->easy_click) && (screen_info->compositor_active))
         {
             clientIncOpacity(c);
         }
-        else if (!FLAG_TEST (c->flags, CLIENT_FLAG_SHADED))
+        else
+#endif /* HAVE_COMPOSITOR */
+        if (!FLAG_TEST (c->flags, CLIENT_FLAG_SHADED))
         {
             if (screen_info->params->mousewheel_rollup)
             {
@@ -816,11 +819,14 @@ titleButton (Client * c, guint state, XButtonEvent * ev)
     else if (ev->button == Button5)
     {
         /* Mouse wheel scroll down */
-        if (state == AltMask)
+#ifdef HAVE_COMPOSITOR
+        if ((state) && (state == screen_info->params->easy_click) && (screen_info->compositor_active))
         {
             clientDecOpacity(c);
         }
-        else if (FLAG_TEST (c->flags, CLIENT_FLAG_SHADED))
+        else
+#endif /* HAVE_COMPOSITOR */
+        if (FLAG_TEST (c->flags, CLIENT_FLAG_SHADED))
         {
             if (screen_info->params->mousewheel_rollup)
             {
@@ -904,13 +910,13 @@ handleButtonPress (DisplayInfo *display_info, XButtonEvent * ev)
             edgeButton (c, part, ev);
         }
 #ifdef HAVE_COMPOSITOR
-        else if ((ev->button == Button4) && (state) && (state == screen_info->params->easy_click)
-                  && (screen_info->compositor_active))
+        else if ((ev->button == Button4) && (screen_info->params->zoom_desktop) && (state) &&
+                 (state == screen_info->params->easy_click) && (screen_info->compositor_active))
         {
             compositorZoomIn(screen_info, ev);
         }
-        else if ((ev->button == Button5) && (state) && (state == screen_info->params->easy_click)
-                  && (screen_info->compositor_active))
+        else if ((ev->button == Button5) && (screen_info->params->zoom_desktop) && (state) &&
+                 (state == screen_info->params->easy_click) && (screen_info->compositor_active))
         {
             compositorZoomOut(screen_info, ev);
         }
@@ -1335,8 +1341,8 @@ handleConfigureRequest (DisplayInfo *display_info, XConfigureRequestEvent * ev)
             /* Sorry, but it's not the right time for configure request */
             return EVENT_FILTER_REMOVE;
         }
-        clientAdjustCoordGravity (c, c->gravity, &ev->value_mask, &wc);
         clientMoveResizeWindow (c, &wc, ev->value_mask);
+        clientAdjustCoordGravity (c, c->gravity, &ev->value_mask, &wc);
     }
     else
     {
@@ -1880,16 +1886,16 @@ handlePropertyNotify (DisplayInfo *display_info, XPropertyEvent * ev)
         }
         else if (ev->atom == display_info->atoms[NET_WM_WINDOW_OPACITY])
         {
-            TRACE ("client \"%s\" (0x%lx) has received a NET_WM_OPACITY notify", c->name, c->window);
+            TRACE ("client \"%s\" (0x%lx) has received a NET_WM_WINDOW_OPACITY notify", c->name, c->window);
             if (!getOpacity (display_info, c->window, &c->opacity))
             {
                 c->opacity =  NET_WM_OPAQUE;
             }
-            compositorWindowSetOpacity (display_info, c->frame, c->opacity);
+            clientSetOpacity (c, c->opacity, 0, 0);
         }
         else if (ev->atom == display_info->atoms[NET_WM_WINDOW_OPACITY_LOCKED])
         {
-            TRACE ("client \"%s\" (0x%lx) has received a NET_WM_OPACITY_LOCKED notify", c->name, c->window);
+            TRACE ("client \"%s\" (0x%lx) has received a NET_WM_WINDOW_OPACITY_LOCKED notify", c->name, c->window);
             if (getOpacityLock (display_info, c->window))
             {
                 FLAG_SET (c->xfwm_flags, XFWM_FLAG_OPACITY_LOCKED);
@@ -1911,6 +1917,16 @@ handlePropertyNotify (DisplayInfo *display_info, XPropertyEvent * ev)
             clientGetGtkFrameExtents (c);
             clientUpdateMaximizeSize (c);
         }
+        else if (ev->atom == display_info->atoms[GTK_HIDE_TITLEBAR_WHEN_MAXIMIZED])
+        {
+            TRACE ("client \"%s\" (0x%lx) has received a GTK_HIDE_TITLEBAR_WHEN_MAXIMIZED notify", c->name, c->window);
+            clientGetGtkHideTitlebar (c);
+            if (FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED))
+            {
+                clientUpdateMaximizeSize (c);
+                clientReconfigure (c, CFG_FORCE_REDRAW);
+            }
+        }
 #ifdef HAVE_STARTUP_NOTIFICATION
         else if (ev->atom == display_info->atoms[NET_STARTUP_ID])
         {
@@ -1925,8 +1941,8 @@ handlePropertyNotify (DisplayInfo *display_info, XPropertyEvent * ev)
 #ifdef HAVE_XSYNC
         else if (ev->atom == display_info->atoms[NET_WM_SYNC_REQUEST_COUNTER])
         {
-            getXSyncCounter (display_info, c->window, &c->xsync_counter);
-            TRACE ("Window 0x%lx has NET_WM_SYNC_REQUEST_COUNTER set to 0x%lx", c->window, c->xsync_counter);
+            TRACE ("Window 0x%lx has received NET_WM_SYNC_REQUEST_COUNTER", c->window);
+            clientGetXSyncCounter (c);
         }
 #endif /* HAVE_XSYNC */
 
@@ -2214,20 +2230,14 @@ handleXSyncAlarmNotify (DisplayInfo *display_info, XSyncAlarmNotifyEvent * ev)
     Client *c;
 
     TRACE ("entering handleXSyncAlarmNotify");
-
-    if (!display_info->have_xsync)
+    if (display_info->have_xsync)
     {
-        return EVENT_FILTER_REMOVE;
+        c = myDisplayGetClientFromXSyncAlarm (display_info, ev->alarm);
+        if (c)
+        {
+            clientXSyncUpdateValue (c, ev->counter_value);
+        }
     }
-
-    c = myDisplayGetClientFromXSyncAlarm (display_info, ev->alarm);
-    if (c)
-    {
-        c->xsync_waiting = FALSE;
-        c->xsync_value = ev->counter_value;
-        clientXSyncClearTimeout (c);
-    }
-
     return EVENT_FILTER_REMOVE;
 }
 #endif /* HAVE_XSYNC */
@@ -2817,6 +2827,8 @@ size_changed_cb(GdkScreen *gscreen, gpointer data)
 
         setNetWorkarea (display_info, screen_info->xroot, screen_info->workspace_count,
                         screen_info->width, screen_info->height, screen_info->margins);
+        setNetDesktopInfo (display_info, screen_info->xroot, screen_info->current_ws,
+                           screen_info->width, screen_info->height);
 
         placeSidewalks (screen_info, screen_info->params->wrap_workspaces);
 
@@ -2870,6 +2882,8 @@ monitors_changed_cb(GdkScreen *gscreen, gpointer data)
 
         setNetWorkarea (display_info, screen_info->xroot, screen_info->workspace_count,
                         screen_info->width, screen_info->height, screen_info->margins);
+        setNetDesktopInfo (display_info, screen_info->xroot, screen_info->current_ws,
+                           screen_info->width, screen_info->height);
 
         placeSidewalks (screen_info, screen_info->params->wrap_workspaces);
     }

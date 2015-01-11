@@ -55,7 +55,7 @@
     ButtonReleaseMask | \
     LeaveWindowMask
 
-#define TILE_DISTANCE 2
+#define TILE_DISTANCE 10
 
 typedef struct _MoveResizeData MoveResizeData;
 struct _MoveResizeData
@@ -69,6 +69,8 @@ struct _MoveResizeData
     guint button;
     gint cancel_x, cancel_y;
     gint cancel_w, cancel_h;
+    unsigned long cancel_flags;
+    unsigned long configure_flags;
     guint cancel_workspace;
     gint mx, my;
     gint px, py; /* pointer relative position */
@@ -90,7 +92,7 @@ clientSetSize (Client * c, int *size, int size_min, int size_max, int size_inc, 
 
     /* Bypass resize increment and max sizes for fullscreen */
     if (!FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN)
-        && !(FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED)
+        && !(FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED)
              && (c->screen_info->params->borderless_maximize)))
     {
         if (!source_is_application && (c->size->flags & PResizeInc) && (size_inc))
@@ -760,14 +762,7 @@ clientMoveTile (Client *c, XMotionEvent *xevent)
 
     screen_info = c->screen_info;
 
-    /*
-     * Tiling when moving really relies on restore_on_move to work
-     * reliably so just don't do anything if any of the above requirement
-     * is not met (restore_on_move being disabled is from another time,
-     * we should really not have such an option, I must have been weaked
-     * in the past...)
-     */
-    if (!(screen_info->params->tile_on_move && screen_info->params->restore_on_move))
+    if (!screen_info->params->tile_on_move)
     {
         return FALSE;
     }
@@ -784,34 +779,22 @@ clientMoveTile (Client *c, XMotionEvent *xevent)
     layout = screen_info->desktop_layout;
     dist = MIN (TILE_DISTANCE, frameDecorationTop (screen_info) / 2);
 
-    if (!screen_info->params->wrap_windows || layout.cols < 2)
+    if ((x >= disp_x - 1) && (x < disp_x + dist) &&
+        (y >= disp_y - 1) && (y < disp_max_y + 1))
     {
-        if ((x >= disp_x - 1) && (x < disp_x + dist) &&
-            (y >= disp_y - 1) && (y < disp_max_y + 1))
-        {
-            return clientTile (c, x, y, TILE_LEFT, !screen_info->params->box_move);
-        }
-
-        if ((x >= disp_max_x - dist) && (x < disp_max_x + 1) &&
-            (y >= disp_y - 1) && (y < disp_max_y + 1))
-        {
-            return clientTile (c, x, y, TILE_RIGHT, !screen_info->params->box_move);
-        }
+        return clientTile (c, x, y, TILE_LEFT, !screen_info->params->box_move);
     }
 
-    if (!screen_info->params->wrap_windows || layout.rows < 2)
+    if ((x >= disp_max_x - dist) && (x < disp_max_x + 1) &&
+        (y >= disp_y - 1) && (y < disp_max_y + 1))
     {
-        if ((x >= disp_x - 1) && (x < disp_max_x + 1) &&
-            (y >= disp_y - 1) && (y < disp_y + dist))
-        {
-            return clientTile (c, x, y, TILE_UP, !screen_info->params->box_move);
-        }
+        return clientTile (c, x, y, TILE_RIGHT, !screen_info->params->box_move);
+    }
 
-        if ((x >= disp_x - 1) && (x < disp_max_x + 1) &&
-            (y >= disp_max_y - dist) && (y < disp_max_y + 1))
-        {
-            return clientTile (c, x, y, TILE_DOWN, !screen_info->params->box_move);
-        }
+    if ((x >= disp_x - 1) && (x < disp_max_x + 1) &&
+        (y >= disp_y - 1) && (y < disp_y + dist))
+    {
+        return clientToggleMaximized (c, CLIENT_FLAG_MAXIMIZED, FALSE);
     }
 
     return FALSE;
@@ -820,8 +803,6 @@ clientMoveTile (Client *c, XMotionEvent *xevent)
 static eventFilterStatus
 clientMoveEventFilter (XEvent * xevent, gpointer data)
 {
-    static gboolean toggled_maximize = FALSE;
-    unsigned long configure_flags;
     ScreenInfo *screen_info;
     DisplayInfo *display_info;
     eventFilterStatus status = EVENT_FILTER_STOP;
@@ -830,6 +811,7 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
     gboolean moving;
     XWindowChanges wc;
     int prev_x, prev_y;
+    unsigned long cancel_maximize_flags;
 
     TRACE ("entering clientMoveEventFilter");
 
@@ -838,7 +820,6 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
     prev_y=c->y;
     screen_info = c->screen_info;
     display_info = screen_info->display_info;
-    configure_flags = NO_CFG_FLAG;
 
     /*
      * Clients may choose to end the move operation,
@@ -892,29 +873,28 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
 
             c->x = passdata->cancel_x;
             c->y = passdata->cancel_y;
+            /* Restore the width height to correct the outline */
+            c->width = passdata->cancel_w;
+            c->height = passdata->cancel_h;
 
-            if (screen_info->params->box_move)
-            {
-                clientDrawOutline (c);
-            }
-            else
-            {
-                wc.x = c->x;
-                wc.y = c->y;
-                clientConfigure (c, &wc, CWX | CWY, configure_flags);
-            }
             if (screen_info->current_ws != passdata->cancel_workspace)
             {
                 workspaceSwitch (screen_info, passdata->cancel_workspace, c, FALSE, xevent->xkey.time);
             }
-            if (toggled_maximize)
+            cancel_maximize_flags = passdata->cancel_flags & CLIENT_FLAG_MAXIMIZED;
+            if (!FLAG_TEST_AND_NOT(c->flags, cancel_maximize_flags, CLIENT_FLAG_MAXIMIZED))
             {
-                toggled_maximize = FALSE;
-                if (clientToggleMaximized (c, CLIENT_FLAG_MAXIMIZED, FALSE))
+                /* Toggle maximize on the differences between the current state and the cancelled state */
+                cancel_maximize_flags ^= c->flags & CLIENT_FLAG_MAXIMIZED;
+                if (clientToggleMaximized (c, cancel_maximize_flags, FALSE))
                 {
-                    configure_flags = CFG_FORCE_REDRAW;
+                    passdata->configure_flags = CFG_FORCE_REDRAW;
                     passdata->move_resized = TRUE;
                 }
+            }
+            if (screen_info->params->box_move)
+            {
+                clientDrawOutline (c);
             }
         }
         else if (passdata->use_keys)
@@ -949,7 +929,7 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
             clientMoveWarp (c, (XMotionEvent *) xevent);
         }
 
-        if ((screen_info->params->restore_on_move) && FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED))
+        if (FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED))
         {
 
             if ((ABS (xevent->xmotion.x_root - passdata->mx) > 15) ||
@@ -961,10 +941,6 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
                 xratio = (xevent->xmotion.x_root - frameExtentX (c)) / (double) frameExtentWidth (c);
                 yratio = (xevent->xmotion.y_root - frameExtentY (c)) / (double) frameExtentHeight (c);
 
-                if (FLAG_TEST_ALL(c->flags, CLIENT_FLAG_MAXIMIZED))
-                {
-                    toggled_maximize = TRUE;
-                }
                 if (clientToggleMaximized (c, c->flags & CLIENT_FLAG_MAXIMIZED, FALSE))
                 {
                     passdata->move_resized = TRUE;
@@ -983,7 +959,7 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
                         passdata->my = CLAMP(frameExtentY (c) + frameExtentHeight (c) * yratio, frameExtentY (c), frameExtentY (c) + frameExtentHeight (c));
                     }
 
-                    configure_flags = CFG_FORCE_REDRAW;
+                    passdata->configure_flags = CFG_FORCE_REDRAW;
                 }
             }
             else
@@ -997,17 +973,7 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
         c->y = passdata->oy + (xevent->xmotion.y_root - passdata->my);
 
         clientSnapPosition (c, prev_x, prev_y);
-        if (screen_info->params->restore_on_move && toggled_maximize)
-        {
-            if ((clientConstrainPos (c, FALSE) & CLIENT_CONSTRAINED_TOP) &&
-                 clientToggleMaximized (c, CLIENT_FLAG_MAXIMIZED, FALSE))
-            {
-                configure_flags = CFG_FORCE_REDRAW;
-                toggled_maximize = FALSE;
-                passdata->move_resized = TRUE;
-            }
-        }
-        else if (!clientMoveTile (c, (XMotionEvent *) xevent))
+        if (!clientMoveTile (c, (XMotionEvent *) xevent))
         {
             clientConstrainPos(c, FALSE);
         }
@@ -1036,7 +1002,9 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
 
             wc.x = c->x;
             wc.y = c->y;
-            clientConfigure (c, &wc, changes, configure_flags);
+            clientConfigure (c, &wc, changes, passdata->configure_flags);
+            /* Configure applied, clear the flags */
+            passdata->configure_flags = NO_CFG_FLAG;
         }
     }
     else if ((xevent->type == UnmapNotify) && (xevent->xunmap.window == c->window))
@@ -1057,7 +1025,6 @@ clientMoveEventFilter (XEvent * xevent, gpointer data)
     if (!moving)
     {
         TRACE ("event loop now finished");
-        toggled_maximize = FALSE;
         clientMoveWarp (c, NULL);
         if (!FLAG_TEST (c->flags, CLIENT_FLAG_MAXIMIZED))
         {
@@ -1102,6 +1069,10 @@ clientMove (Client * c, XEvent * ev)
     passdata.c = c;
     passdata.cancel_x = passdata.ox = c->x;
     passdata.cancel_y = passdata.oy = c->y;
+    passdata.cancel_w = c->width;
+    passdata.cancel_h = c->height;
+    passdata.cancel_flags = c->flags;
+    passdata.configure_flags = NO_CFG_FLAG;
     passdata.cancel_workspace = c->win_workspace;
     passdata.use_keys = FALSE;
     passdata.grab = FALSE;
@@ -1199,7 +1170,7 @@ clientMove (Client * c, XEvent * ev)
         wc.height = c->height;
         changes |= CWWidth | CWHeight;
     }
-    clientConfigure (c, &wc, changes, NO_CFG_FLAG);
+    clientConfigure (c, &wc, changes, passdata.configure_flags);
 
     if (!passdata.released)
     {
@@ -1249,7 +1220,7 @@ clientChangeHandle(MoveResizeData *passdata, int handle)
 }
 
 static void
-clientResizeConfigure (Client *c, int px, int py, int pw, int ph)
+clientResizeConfigure (Client *c, int pw, int ph)
 {
     ScreenInfo *screen_info;
     DisplayInfo *display_info;
@@ -1258,24 +1229,26 @@ clientResizeConfigure (Client *c, int px, int py, int pw, int ph)
     screen_info = c->screen_info;
     display_info = screen_info->display_info;
 
-#ifdef HAVE_XSYNC
-    if (c->xsync_waiting)
+    if (pw == c->width && ph == c->height)
     {
+        /* Not a resize */
         return;
     }
-    else
+#ifdef HAVE_XSYNC
+    if (!FLAG_TEST (c->flags, CLIENT_FLAG_XSYNC_WAITING))
     {
-        if ((display_info->have_xsync) && (c->xsync_enabled) && (c->xsync_counter))
+        if ((display_info->have_xsync) &&
+            (FLAG_TEST (c->flags, CLIENT_FLAG_XSYNC_ENABLED)) &&
+            (c->xsync_counter))
         {
             clientXSyncRequest (c);
         }
+        else
+        {
 #endif /* HAVE_XSYNC */
-        wc.x = c->x;
-        wc.y = c->y;
-        wc.width = c->width;
-        wc.height = c->height;
-        clientConfigure (c, &wc, CWX | CWY | CWWidth | CWHeight, NO_CFG_FLAG);
+            clientReconfigure (c, NO_CFG_FLAG);
 #ifdef HAVE_XSYNC
+        }
     }
 #endif /* HAVE_XSYNC */
 }
@@ -1291,9 +1264,7 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
     eventFilterStatus status;
     int prev_x, prev_y, prev_width, prev_height;
     int cx, cy, disp_x, disp_y, disp_max_x, disp_max_y;
-    int frame_x, frame_y, frame_height, frame_width, frame_top;
     int move_top, move_bottom, move_left, move_right;
-    int temp;
     gint min_visible;
     gboolean resizing;
     int right_edge; /* -Cliff */
@@ -1313,15 +1284,10 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
      */
     resizing = FLAG_TEST (c->xfwm_flags, XFWM_FLAG_MOVING_RESIZING);
 
-    frame_x = frameExtentX (c);
-    frame_y = frameExtentY (c);
-    frame_height = frameExtentHeight (c);
-    frame_width = frameExtentWidth (c);
-    frame_top = frameExtentTop (c);
-    min_visible = MAX (frame_top, CLIENT_MIN_VISIBLE);
+    min_visible = MAX (frameExtentTop (c), CLIENT_MIN_VISIBLE);
 
-    cx = frame_x + (frame_width / 2);
-    cy = frame_y + (frame_height / 2);
+    cx = frameExtentX (c) + (frameExtentWidth (c) / 2);
+    cy = frameExtentY (c) + (frameExtentHeight (c) / 2);
 
     move_top = ((passdata->handle == CORNER_TOP_RIGHT)
             || (passdata->handle == CORNER_TOP_LEFT)
@@ -1447,7 +1413,7 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
             }
             else
             {
-                clientResizeConfigure (c, prev_x, prev_y, prev_width, prev_height);
+                clientResizeConfigure (c, prev_width, prev_height);
             }
         }
         else if (passdata->use_keys)
@@ -1479,10 +1445,17 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
         }
         passdata->oldw = c->width;
         passdata->oldh = c->height;
+        right_edge = c->x + c->width;
+        bottom_edge = c->y + c->height;
 
         if (move_left)
         {
             c->width = passdata->ow - (xevent->xmotion.x_root - passdata->mx);
+            c->x = c->x - (c->width - passdata->oldw);
+
+            /* Snap the left edge to something. -Cliff */
+            c->x = clientFindClosestEdgeX (c, c->x - frameExtentLeft (c)) + frameExtentLeft (c);
+            c->width = right_edge - c->x;
         }
         else if (move_right)
         {
@@ -1497,6 +1470,11 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
             if (move_top)
             {
                 c->height = passdata->oh - (xevent->xmotion.y_root - passdata->my);
+                c->y = c->y - (c->height - passdata->oldh);
+
+                /* Snap the top edge to something. -Cliff */
+                c->y = clientFindClosestEdgeY (c, c->y - frameExtentTop (c)) + frameExtentTop (c);
+                c->height = bottom_edge - c->y;
             }
             else if (move_bottom)
             {
@@ -1506,78 +1484,27 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
                 c->height = clientFindClosestEdgeY (c, c->y + c->height + frameExtentBottom (c)) - c->y - frameExtentBottom (c);
             }
         }
+
+        /* Make sure the title remains visible on screen, adjust size if moved */
+        cx = c->x;
+        cy = c->y;
+        clientConstrainPos (c, FALSE);
+        c->height -= c->y - cy;
+        c->width -= c->x - cx;
+
+        /* Apply contrain ratio if any, only once the expected size is set */
         clientConstrainRatio (c, passdata->handle);
 
         clientSetWidth (c, c->width, FALSE);
         if (move_left)
         {
-            c->x = c->x - (c->width - passdata->oldw);
-
-            /* Snap the left edge to something. -Cliff */
-            right_edge = c->x + c->width;
-            c->x = clientFindClosestEdgeX (c, c->x - frameExtentLeft (c)) + frameExtentLeft (c);
-            c->width = right_edge - c->x;
-
-            frame_x = frameExtentX (c);
+            c->x = right_edge - c->width;
         }
 
         clientSetHeight (c, c->height, FALSE);
         if (!FLAG_TEST (c->flags, CLIENT_FLAG_SHADED) && move_top)
         {
-            c->y = c->y - (c->height - passdata->oldh);
-
-            /* Snap the top edge to something. -Cliff */
-            bottom_edge = c->y + c->height;
-            c->y = clientFindClosestEdgeY (c, c->y - frameExtentTop (c)) + frameExtentTop (c);
-            c->height = bottom_edge - c->y;
-
-            frame_y = frameExtentY (c);
-        }
-
-        if (move_top)
-        {
-            if ((c->y > MAX (disp_max_y - min_visible, screen_info->height - screen_info->margins [STRUTS_BOTTOM] - min_visible))
-                || (!clientCheckTitle (c) && (frame_y < screen_info->margins [STRUTS_TOP])))
-            {
-                temp = c->y + c->height;
-                c->y = CLAMP (c->y, screen_info->margins [STRUTS_TOP] + frame_top,
-                         MAX (disp_max_y - min_visible,  screen_info->height - screen_info->margins [STRUTS_BOTTOM] - min_visible));
-                clientSetHeight (c, temp - c->y, FALSE);
-                c->y = temp - c->height;
-            }
-            else if (frame_y < 0)
-            {
-                temp = c->y + c->height;
-                c->y = frame_top;
-                clientSetHeight (c, temp - c->y, FALSE);
-                c->y = temp - c->height;
-            }
-        }
-        else if (move_bottom)
-        {
-            if (c->y + c->height < MAX (disp_y + min_visible, screen_info->margins [STRUTS_TOP] + min_visible))
-            {
-                temp = MAX (disp_y + min_visible, screen_info->margins [STRUTS_TOP] + min_visible);
-                clientSetHeight (c, temp - c->y, FALSE);
-            }
-        }
-        if (move_left)
-        {
-            if (c->x > MIN (disp_max_x - min_visible, screen_info->width - screen_info->margins [STRUTS_RIGHT] - min_visible))
-            {
-                temp = c->x + c->width;
-                c->x = MIN (disp_max_x - min_visible, screen_info->width - screen_info->margins [STRUTS_RIGHT] - min_visible);
-                clientSetWidth (c, temp - c->x, FALSE);
-                c->x = temp - c->width;
-            }
-        }
-        else if (move_right)
-        {
-            if (c->x + c->width < MAX (disp_x + min_visible, screen_info->margins [STRUTS_LEFT] + min_visible))
-            {
-                temp = MAX (disp_x + min_visible, screen_info->margins [STRUTS_LEFT] + min_visible);
-                clientSetWidth (c, temp - c->x, FALSE);
-            }
+            c->y =  bottom_edge - c->height;
         }
 
         if (passdata->poswin)
@@ -1590,7 +1517,7 @@ clientResizeEventFilter (XEvent * xevent, gpointer data)
         }
         else
         {
-            clientResizeConfigure (c, prev_x, prev_y, prev_width, prev_height);
+            clientResizeConfigure (c, prev_width, prev_height);
         }
     }
     else if (xevent->type == ButtonRelease)
@@ -1627,7 +1554,6 @@ clientResize (Client * c, int handle, XEvent * ev)
 {
     ScreenInfo *screen_info;
     DisplayInfo *display_info;
-    XWindowChanges wc;
     MoveResizeData passdata;
     int w_orig, h_orig;
     Cursor cursor;
@@ -1724,10 +1650,6 @@ clientResize (Client * c, int handle, XEvent * ev)
         poswinShow (passdata.poswin);
     }
 
-#ifdef HAVE_XSYNC
-    clientXSyncEnable (c);
-#endif /* HAVE_XSYNC */
-
     /* Set window translucent while resizing */
     if ((screen_info->params->resize_opacity < 100) &&
         !(screen_info->params->box_resize) &&
@@ -1738,6 +1660,10 @@ clientResize (Client * c, int handle, XEvent * ev)
 
     /* Clear any previously saved pos flag from screen resize */
     FLAG_UNSET (c->xfwm_flags, XFWM_FLAG_SAVED_POS);
+
+#ifdef HAVE_XSYNC
+    clientCreateXSyncAlarm (c);
+#endif /* HAVE_XSYNC */
 
     FLAG_SET (c->xfwm_flags, XFWM_FLAG_MOVING_RESIZING);
     TRACE ("entering resize loop");
@@ -1764,15 +1690,11 @@ clientResize (Client * c, int handle, XEvent * ev)
         clientRemoveMaximizeFlag (c);
     }
 
-    wc.x = c->x;
-    wc.y = c->y;
-    wc.width = c->width;
-    wc.height = c->height;
-    clientConfigure (c, &wc, CWX | CWY | CWHeight | CWWidth, NO_CFG_FLAG);
 #ifdef HAVE_XSYNC
-    clientXSyncClearTimeout (c);
-    c->xsync_waiting = FALSE;
+    clientDestroyXSyncAlarm (c);
 #endif /* HAVE_XSYNC */
+
+    clientReconfigure (c, NO_CFG_FLAG);
 
     if (!passdata.released)
     {

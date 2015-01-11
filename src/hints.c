@@ -18,7 +18,7 @@
 
         oroborus - (c) 2001 Ken Lynch
         Metacity - (c) 2001 Havoc Pennington
-        xfwm4    - (c) 2002-2011 Olivier Fourdan
+        xfwm4    - (c) 2002-2015 Olivier Fourdan
 
  */
 
@@ -242,7 +242,7 @@ getHint (DisplayInfo *display_info, Window w, int atom_id, long *value)
                              FALSE, XA_CARDINAL, &real_type, &real_format, &items_read, &items_left,
                              (unsigned char **) &data) == Success) && (items_read))
     {
-        *value = *((long *) data);
+        *value = *((long *) data) & ((1LL << real_format) - 1);
         if (data)
         {
             XFree (data);
@@ -477,7 +477,7 @@ gboolean
 getCardinalList (DisplayInfo *display_info, Window w, int atom_id, unsigned long **cardinals_p, int *n_cardinals_p)
 {
     Atom type;
-    int format;
+    int i, format;
     unsigned long n_cardinals;
     unsigned long bytes_after;
     unsigned char *data;
@@ -505,6 +505,10 @@ getCardinalList (DisplayInfo *display_info, Window w, int atom_id, unsigned long
 
     *cardinals_p = cardinals;
     *n_cardinals_p = n_cardinals;
+    for (i = 0; i < n_cardinals; i++)
+    {
+        (*cardinals_p)[i] = (*cardinals_p)[i] & ((1LL << format) - 1);
+    }
 
     return TRUE;
 }
@@ -585,10 +589,10 @@ setNetCurrentDesktop (DisplayInfo *display_info, Window root, int workspace)
 }
 
 void
-initNetDesktopInfo (DisplayInfo *display_info, Window root, int workspace, int width, int height)
+setNetDesktopInfo (DisplayInfo *display_info, Window root, int workspace, int width, int height)
 {
     unsigned long data[2];
-    TRACE ("entering initNetDesktopInfo");
+    TRACE ("entering setNetDesktopInfo");
     data[0] = width;
     data[1] = height;
     XChangeProperty (display_info->dpy, root, display_info->atoms[NET_DESKTOP_GEOMETRY],
@@ -1114,7 +1118,7 @@ getRGBIconData (DisplayInfo *display_info, Window window, unsigned long **data, 
 }
 
 gboolean
-getOpacity (DisplayInfo *display_info, Window window, guint *opacity)
+getOpacity (DisplayInfo *display_info, Window window, guint32 *opacity)
 {
     long val;
 
@@ -1125,7 +1129,7 @@ getOpacity (DisplayInfo *display_info, Window window, guint *opacity)
     val = 0;
     if (getHint (display_info, window, NET_WM_WINDOW_OPACITY, &val))
     {
-        *opacity = (guint) val;
+        *opacity = (guint32) val;
         return TRUE;
     }
 

@@ -101,7 +101,7 @@
 #endif
 
 #ifndef CLIENT_XSYNC_TIMEOUT
-#define CLIENT_XSYNC_TIMEOUT            1000 /* ms */
+#define CLIENT_XSYNC_TIMEOUT            500  /* ms */
 #endif
 
 #ifndef CLIENT_BLINK_TIMEOUT
@@ -161,6 +161,11 @@
 #define CLIENT_FLAG_DEMANDS_ATTENTION   (1L<<17)
 #define CLIENT_FLAG_HAS_SHAPE           (1L<<18)
 #define CLIENT_FLAG_FULLSCREN_MONITORS  (1L<<19)
+#define CLIENT_FLAG_HAS_FRAME_EXTENTS   (1L<<20)
+#define CLIENT_FLAG_HIDE_TITLEBAR       (1L<<21)
+#define CLIENT_FLAG_XSYNC_WAITING       (1L<<22)
+#define CLIENT_FLAG_XSYNC_ENABLED       (1L<<23)
+#define CLIENT_FLAG_XSYNC_EXT_COUNTER   (1L<<24)
 
 #define WM_FLAG_DELETE                  (1L<<0)
 #define WM_FLAG_INPUT                   (1L<<1)
@@ -203,9 +208,9 @@
 #define OPACITY_INACTIVE                (1<<2)
 
 /* Convenient macros */
-#define FLAG_TEST(flag,bits)                   (flag & (bits))
-#define FLAG_TEST_ALL(flag,bits)               ((flag & (bits)) == (bits))
-#define FLAG_TEST_AND_NOT(flag,bits1,bits2)    ((flag & (bits1 | bits2)) == (bits1))
+#define FLAG_TEST(flag,bits)                   ((flag) & (bits))
+#define FLAG_TEST_ALL(flag,bits)               (((flag) & (bits)) == (bits))
+#define FLAG_TEST_AND_NOT(flag,bits1,bits2)    (((flag) & ((bits1) | (bits2))) == (bits1))
 #define FLAG_SET(flag,bits)                    (flag |= (bits))
 #define FLAG_UNSET(flag,bits)                  (flag &= ~(bits))
 #define FLAG_TOGGLE(flag,bits)                 (flag ^= (bits))
@@ -221,7 +226,15 @@
                                                                   XFWM_FLAG_IS_RESIZABLE) && \
                                          !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN | CLIENT_FLAG_MAXIMIZED))
 #define CLIENT_CAN_TILE_WINDOW(c)       (CLIENT_CAN_MAXIMIZE_WINDOW(c) && \
+                                         !FLAG_TEST (c->flags, CLIENT_FLAG_SHADED) && \
                                          (c->type & WINDOW_NORMAL))
+#define CLIENT_HAS_TITLE(c)             (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_HAS_BORDER) && \
+                                         !FLAG_TEST (c->flags, CLIENT_FLAG_FULLSCREEN) && \
+                                         (FLAG_TEST (c->flags, CLIENT_FLAG_SHADED) || \
+                                          !FLAG_TEST_ALL (c->flags, CLIENT_FLAG_MAXIMIZED) ||  \
+                                          !((FLAG_TEST (c->flags, CLIENT_FLAG_HIDE_TITLEBAR) || \
+                                            (c->screen_info->params->titleless_maximize)) && \
+                                            (c->screen_info->params->borderless_maximize))))
 
 typedef enum
 {
@@ -312,7 +325,6 @@ struct _Client
     unsigned long wm_flags;
     unsigned long xfwm_flags;
     gint fullscreen_monitors[4];
-    gboolean has_frame_extents;
     gint frame_extents[SIDE_COUNT];
 
     /* Termination dialog */
@@ -327,8 +339,8 @@ struct _Client
     /* Timout for asynchronous icon update */
     guint ping_timeout_id;
     /* Opacity for the compositor */
-    guint opacity;
-    guint opacity_applied;
+    guint32 opacity;
+    guint32 opacity_applied;
     guint opacity_flags;
 
 #ifdef HAVE_LIBSTARTUP_NOTIFICATION
@@ -340,9 +352,8 @@ struct _Client
     XSyncAlarm  xsync_alarm;
     XSyncCounter xsync_counter;
     XSyncValue xsync_value;
+    XSyncValue next_xsync_value;
     guint xsync_timeout_id;
-    gboolean xsync_waiting;
-    gboolean xsync_enabled;
 #endif /* HAVE_XSYNC */
 };
 
@@ -363,9 +374,12 @@ void                     clientAdjustCoordGravity               (Client *,
                                                                  int,
                                                                  unsigned long *,
                                                                  XWindowChanges *);
+void                     clientSendConfigureNotify              (Client *);
 void                     clientConfigure                        (Client *,
                                                                  XWindowChanges *,
                                                                  unsigned long,
+                                                                 unsigned short);
+void                     clientReconfigure                      (Client *,
                                                                  unsigned short);
 void                     clientMoveResizeWindow                 (Client *,
                                                                  XWindowChanges *,
@@ -447,8 +461,9 @@ gboolean                 clientTile                             (Client *,
 void                     clientUpdateOpacity                    (Client *);
 void                     clientUpdateAllOpacity                 (ScreenInfo *);
 void                     clientSetOpacity                       (Client *,
-                                                                 guint,
-                                                                 guint, guint);
+                                                                 guint32,
+                                                                 guint32,
+                                                                 guint32);
 void                     clientIncOpacity                       (Client *);
 void                     clientDecOpacity                       (Client *);
 void                     clientUpdateCursor                     (Client *);
@@ -465,6 +480,8 @@ int                      clientGetButtonState                   (Client *,
                                                                  int,
                                                                  int);
 Client                  *clientGetLeader                        (Client *);
+gboolean                 clientGetGtkFrameExtents               (Client *);
+gboolean                 clientGetGtkHideTitlebar               (Client *);
 #ifdef HAVE_LIBSTARTUP_NOTIFICATION
 char                    *clientGetStartupId                     (Client *);
 #endif /* HAVE_LIBSTARTUP_NOTIFICATION */
