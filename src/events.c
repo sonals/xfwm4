@@ -1216,7 +1216,7 @@ handleUnmapNotify (DisplayInfo *display_info, XUnmapEvent * ev)
     c = myDisplayGetClientFromWindow (display_info, ev->window, SEARCH_WINDOW);
     if (c)
     {
-        TRACE ("UnmapNotify for \"%s\" (0x%lx)", c->name, c->window);
+        DBG ("UnmapNotify for \"%s\" (0x%lx)", c->name, c->window);
         TRACE ("ignore_unmap for \"%s\" is %i", c->name, c->ignore_unmap);
 
         status = EVENT_FILTER_REMOVE;
@@ -2933,4 +2933,3 @@ initPerDisplayCallbacks (DisplayInfo *display_info)
                       G_CALLBACK (refresh_font_cb), (gpointer) (display_info),
                       NULL);
 }
-

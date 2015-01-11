@@ -2079,11 +2079,14 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
         return;
     }
 
-    DBG ("rendering preview for window 0x%lx", cw->id);
+    DBG ("rendering preview for window 0x%lx %s", cw->id, cw->c->name);
 
     pa.subwindow_mode = IncludeInferiors;
     picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, CPSubwindowMode, &pa);
 
+    /*
+     *
+     */
     c.alpha = 0x0;
     c.red   = 0x0;
     c.green = 0x0;
@@ -2092,12 +2095,18 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderFillRectangle(display_info->dpy, PictOpSrc,
                          picture, &c, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
 
+    /*
+     * Scale the picture to fit into the square preview box keeping the original
+     * aspect ratio
+     */
+
     memset(&xform, 0, sizeof(xform));
 
     icon_x = 0;
     icon_y = 0;
     icon_width_x = WIN_ICON_SIZE;
     icon_width_y = WIN_ICON_SIZE;
+
     if (cw->attr.width > cw->attr.height)
     {
         scale = (double) cw->attr.width / (double)WIN_ICON_SIZE;
@@ -2110,6 +2119,11 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
         icon_x = ((double)WIN_ICON_SIZE - (double) cw->attr.width / scale) / 2.0;
         icon_width_x = (double) cw->attr.width / scale;
     }
+
+    /*
+     * Scale the picture to fit into the square preview box keeping the original
+     * aspect ratio
+     */
 
     xform.matrix[0][0] = XDoubleToFixed(scale);
     xform.matrix[1][1] = XDoubleToFixed(scale);
@@ -2127,8 +2141,6 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderSetPictureTransform(display_info->dpy, cw->picture, &identity);
     XRenderSetPictureFilter(display_info->dpy, cw->picture, "fast", NULL, 0);
 
-    DBG("gdk_pixbuf_xlib_get_from_drawable: %s %x %x %p", cw->c->name, cw->preview_pixmap, cw->c->cmap, cw->c->visual);
-
     if (cw->preview)
     {
         XDestroyImage(cw->preview);
@@ -2136,7 +2148,6 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
 
     cw->preview = XGetImage (display_info->dpy, cw->preview_pixmap, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE, AllPlanes, ZPixmap);
 
-    DBG("gdk_pixbuf_xlib_get_from_drawable %p", cw->preview);
     XRenderFreePicture(display_info->dpy, picture);
 #endif /* HAVE_COMPOSITOR */
 }
@@ -2147,7 +2158,7 @@ win_preview(DisplayInfo *display_info, CWindow *cw)
 {
 #ifdef HAVE_COMPOSITOR
     DBG ("preview for window 0x%lx", cw->id);
-    if (cw->viewable)
+    if (WIN_IS_VISIBLE(cw))
     {
         update_win_preview(display_info, cw);
     }
@@ -2169,7 +2180,7 @@ unmap_win (CWindow *cw)
     screen_info = cw->screen_info;
     display_info = screen_info->display_info;
 
-    update_win_preview(screen_info->display_info, cw);
+    //update_win_preview(screen_info->display_info, cw);
 
     if (!WIN_IS_REDIRECTED(cw) && (screen_info->wins_unredirected > 0))
     {
@@ -2572,7 +2583,7 @@ destroy_win (DisplayInfo *display_info, Window id)
 
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (id != None);
-    TRACE ("entering destroy_win: 0x%lx", id);
+    DBG ("entering destroy_win: 0x%lx", id);
 
     cw = find_cwindow_in_display (display_info, id);
     if (cw)
@@ -2918,7 +2929,7 @@ compositorHandleUnmapNotify (DisplayInfo *display_info, XUnmapEvent *ev)
 
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (ev != NULL);
-    TRACE ("entering compositorHandleUnmapNotify for 0x%lx", ev->window);
+    DBG ("entering compositorHandleUnmapNotify for 0x%lx", ev->window);
 
     if (ev->from_configure)
     {

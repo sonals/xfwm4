@@ -1943,7 +1943,7 @@ clientUnframe (Client *c, gboolean remap)
     gboolean reparented;
 
     TRACE ("entering clientUnframe");
-    TRACE ("unframing client \"%s\" (0x%lx) [%s]",
+    DBG ("unframing client \"%s\" (0x%lx) [%s]",
             c->name, c->window, remap ? "remap" : "no remap");
 
     g_return_if_fail (c != NULL);
@@ -2314,7 +2314,10 @@ clientWithdrawSingle (Client *c, GList *exclude_list, gboolean iconify)
     screen_info = c->screen_info;
     display_info = screen_info->display_info;
 
-    TRACE ("hiding client \"%s\" (0x%lx)", c->name, c->window);
+    DBG ("hiding client \"%s\" (0x%lx)", c->name, c->window);
+
+    compositorGetWindowPreview(display_info, c->frame);
+
     clientPassFocus(c->screen_info, c, exclude_list);
     if (FLAG_TEST (c->xfwm_flags, XFWM_FLAG_VISIBLE))
     {
