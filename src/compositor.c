@@ -165,12 +165,11 @@ find_cwindow_in_screen (ScreenInfo *screen_info, Window id)
 
     g_return_val_if_fail (id != None, NULL);
     g_return_val_if_fail (screen_info != NULL, NULL);
-    TRACE ("entering find_cwindow_in_screen for 0x%lx", id);
+    TRACE ("entering for 0x%lx", id);
 
     for (list = screen_info->cwindows; list; list = g_list_next (list))
     {
         CWindow *cw = (CWindow *) list->data;
-//        DBG ("find_cwindow_in_screen found 0x%lx", cw->id);
         if (cw->id == id)
         {
             return cw;
@@ -1986,7 +1985,7 @@ map_win (CWindow *cw)
     DisplayInfo *display_info;
 
     g_return_if_fail (cw != NULL);
-    DBG ("entering map_win 0x%lx", cw->id);
+    TRACE ("entering map_win 0x%lx", cw->id);
 
     screen_info = cw->screen_info;
     display_info = screen_info->display_info;
@@ -2038,7 +2037,6 @@ map_win (CWindow *cw)
 static void
 update_win_preview (DisplayInfo *display_info, CWindow *cw)
 {
-#ifdef HAVE_COMPOSITOR
     XRenderPictFormat *format;
     XRenderPictureAttributes pa;
     Picture picture;
@@ -2053,7 +2051,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
             { XDoubleToFixed(0), XDoubleToFixed(1), XDoubleToFixed(0) },
             { XDoubleToFixed(0), XDoubleToFixed(0), XDoubleToFixed(1) }}};
 
-    DBG ("entering for window 0x%lx", cw->id);
+    TRACE ("entering for window 0x%lx", cw->id);
 
     if (!compositorIsUsable (display_info))
     {
@@ -2074,18 +2072,20 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
 
     if (!cw->preview_pixmap)
     {
-        DBG ("preview_pixmap not found for window 0x%lx", cw->id);
+        TRACE ("preview_pixmap not found for window 0x%lx", cw->id);
         return;
     }
 
-    DBG ("rendering preview for window 0x%lx %s", cw->id, cw->c->name);
+    TRACE ("rendering preview for window 0x%lx %s", cw->id, cw->c->name);
 
     pa.subwindow_mode = IncludeInferiors;
     picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, CPSubwindowMode, &pa);
 
     /*
-     *
+     * Fill the square preview area with transparent background before we layer the preview
+     * of the window over it
      */
+
     c.alpha = 0x0;
     c.red   = 0x0;
     c.green = 0x0;
@@ -2095,8 +2095,8 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
                          picture, &c, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
 
     /*
-     * Scale the picture to fit into the square preview box keeping the original
-     * aspect ratio
+     * Keeping the original aspect ratio, scale down the picture to fit into the square
+     * preview area
      */
 
     memset(&xform, 0, sizeof(xform));
@@ -2148,23 +2148,18 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     cw->preview = XGetImage (display_info->dpy, cw->preview_pixmap, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE, AllPlanes, ZPixmap);
 
     XRenderFreePicture(display_info->dpy, picture);
-#endif /* HAVE_COMPOSITOR */
 }
 
 
 static XImage *
 win_preview(DisplayInfo *display_info, CWindow *cw)
 {
-#ifdef HAVE_COMPOSITOR
-    DBG ("preview for window 0x%lx", cw->id);
+    TRACE ("entering for window 0x%lx", cw->id);
     if (WIN_IS_VISIBLE(cw))
     {
         update_win_preview(display_info, cw);
     }
     return cw->preview;
-#else
-    return NULL;
-#endif
 }
 
 static void
@@ -2174,7 +2169,7 @@ unmap_win (CWindow *cw)
     DisplayInfo *display_info;
 
     g_return_if_fail (cw != NULL);
-    DBG ("entering unmap_win 0x%lx", cw->id);
+    TRACE ("entering unmap_win 0x%lx", cw->id);
 
     screen_info = cw->screen_info;
     display_info = screen_info->display_info;
@@ -2255,9 +2250,8 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
     ScreenInfo *screen_info;
     CWindow *new;
     XRenderPictFormat *format;
-    const char *name = "";
 
-    DBG ("entering add_win: 0x%lx", id);
+    TRACE ("entering add_win: 0x%lx", id);
 
     new = find_cwindow_in_display (display_info, id);
     if (new)
@@ -2279,7 +2273,6 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
     if (c)
     {
         screen_info = c->screen_info;
-        DBG("ID 0x%lx, Window 0x%lx, Frame 0x%lx", id, c->window, c->frame);
     }
     else
     {
@@ -2372,8 +2365,7 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
         new->preview_pixmap = XCreatePixmap(display_info->dpy, screen_info->output,
                                             WIN_ICON_SIZE, WIN_ICON_SIZE, format->depth);
 
-        name = c->name;
-        DBG("preview_pixmap created for window 0x%lx (%s)", id, name);
+        TRACE ("preview_pixmap created for window 0x%lx", id);
     }
 
     TRACE ("window 0x%lx added", id);
@@ -2588,7 +2580,7 @@ destroy_win (DisplayInfo *display_info, Window id)
 
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (id != None);
-    DBG ("entering destroy_win: 0x%lx", id);
+    TRACE ("entering destroy_win: 0x%lx", id);
 
     cw = find_cwindow_in_display (display_info, id);
     if (cw)
@@ -2934,7 +2926,7 @@ compositorHandleUnmapNotify (DisplayInfo *display_info, XUnmapEvent *ev)
 
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (ev != NULL);
-    DBG ("entering compositorHandleUnmapNotify for 0x%lx", ev->window);
+    TRACE ("entering compositorHandleUnmapNotify for 0x%lx", ev->window);
 
     if (ev->from_configure)
     {
@@ -3796,7 +3788,7 @@ compositorGetWindowPreview(DisplayInfo *display_info, Window id)
     CWindow *cw = None;
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (id != None);
-    DBG ("entering for 0x%lx", id);
+    TRACE ("entering for 0x%lx", id);
 
     if (!compositorIsUsable (display_info))
     {

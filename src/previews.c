@@ -1043,8 +1043,8 @@ rgbconvert (XImage *image, guchar *pixels, int rowstride, int alpha, xlib_colorm
 	int bank=5;		/* default fallback converter */
 	Visual *v = cmap->visual;
 
-	DBG("masks = %x:%x:%x\n", v->red_mask, v->green_mask, v->blue_mask);
-	DBG("image depth = %d, bpp = %d\n", image->depth, image->bits_per_pixel);
+	TRACE ("masks = %x:%x:%x\n", v->red_mask, v->green_mask, v->blue_mask);
+	TRACE ("image depth = %d, bpp = %d\n", image->depth, image->bits_per_pixel);
 
 	switch (v->class) {
 				/* I assume this is right for static & greyscale's too? */
@@ -1086,19 +1086,20 @@ rgbconvert (XImage *image, guchar *pixels, int rowstride, int alpha, xlib_colorm
 		break;
 	}
 
-	DBG("converting using conversion function in bank %d\n", bank);
+	TRACE ("converting using conversion function in bank %d\n", bank);
 
 	if (bank==5) {
 		convert_real_slow(image, pixels, rowstride, cmap, alpha);
 	} else {
 		index |= bank << 2;
-		DBG("converting using conversion function in bank %d, index = %d\n", bank, index);
+		TRACE ("converting using conversion function in bank %d, index = %d\n", bank, index);
 		(* convert_map[index]) (image, pixels, rowstride, cmap);
 	}
 }
 
 /*
- * Based on original code in gdk_pixbuf_xlib_get_from_drawable()
+ * Based on original code in gdk_pixbuf_xlib_get_from_drawable().
+ * Modified to force alpha transparency
  */
 
 static GdkPixbuf *
