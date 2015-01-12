@@ -1144,5 +1144,6 @@ getAppPreview (DisplayInfo *display_info, Client *c, int width, int height)
     XImage *image;
 
     image = compositorGetWindowPreview(display_info, c->frame);
-    return gdk_pixbuf_xlib_get_from_image(display_info, image, c->cmap, c->visual, width, height);
+
+    return (image == NULL) ? NULL : gdk_pixbuf_xlib_get_from_image(display_info, image, c->cmap, c->visual, width, height);
 }
