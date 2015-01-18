@@ -3791,7 +3791,7 @@ XImage *
 compositorGetWindowPreview(DisplayInfo *display_info, Window id)
 {
 #ifdef HAVE_COMPOSITOR
-    CWindow *cw = None;
+    CWindow *cw = NULL;
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (id != None);
     TRACE ("entering for 0x%lx", id);
@@ -3814,42 +3814,11 @@ compositorGetWindowPreview(DisplayInfo *display_info, Window id)
 }
 
 
-Pixmap
-compositorGetWindowPreviewPixmap(DisplayInfo *display_info, Window id)
-{
-#ifdef HAVE_COMPOSITOR
-    CWindow *cw = None;
-    g_return_if_fail (display_info != NULL);
-    g_return_if_fail (id != None);
-    TRACE ("entering for 0x%lx", id);
-
-    if (!compositorIsUsable (display_info))
-    {
-        return None;
-    }
-
-    cw = find_cwindow_in_display (display_info, id);
-    if (cw == NULL)
-    {
-        DBG ("could not find 0x%lx", id);
-        return None;
-    }
-    win_preview(display_info, cw);
-    return cw->preview_pixmap;
-#else /* HAVE_COMPOSITOR */
-    return None;
-#endif
-}
-
-
 void
 compositorRenderPreview(DisplayInfo *display_info, Window id, Picture destination)
 {
 #ifdef HAVE_COMPOSITOR
-    CWindow *cw = None;
-    Picture picture;
-    XRenderPictureAttributes pa;
-    XRenderPictFormat *format;
+    CWindow *cw = NULL;
 
     g_return_if_fail (display_info != NULL);
     g_return_if_fail (id != None);
@@ -3867,13 +3836,6 @@ compositorRenderPreview(DisplayInfo *display_info, Window id, Picture destinatio
         return;
     }
     win_preview(display_info, cw);
-
-    format = get_window_format (cw);
-
-    if (!format)
-    {
-        return;
-    }
 
     if (cw->preview_pixmap == None)
     {
@@ -3883,11 +3845,8 @@ compositorRenderPreview(DisplayInfo *display_info, Window id, Picture destinatio
 
     DBG ("rendering preview for window 0x%lx %s", cw->id, cw->c->name);
 
-    picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, 0, NULL);
     XRenderComposite(display_info->dpy, PictOpSrc,
-                     picture, None, destination,
+                     cw->preview_picture, None, destination,
                      0, 0, 0, 0, 0, 0, WIN_PREVIEW_SIZE, WIN_PREVIEW_SIZE);
-
-    XRenderFreePicture(display_info->dpy, picture);
 #endif
 }
