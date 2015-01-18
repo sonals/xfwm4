@@ -102,8 +102,8 @@
 
 #define DRM_CARD0             "/dev/dri/card0"
 
-#ifndef WIN_ICON_SIZE
-#define WIN_ICON_SIZE 192
+#ifndef WIN_PREVIEW_SIZE
+#define WIN_PREVIEW_SIZE 192
 #endif
 
 GdkPixbuf *
@@ -155,6 +155,7 @@ struct _CWindow
 
     XImage *preview;
     Pixmap preview_pixmap;
+    Picture preview_picture;
     guint32 opacity;
 };
 
@@ -757,6 +758,12 @@ free_win_data (CWindow *cw, gboolean delete)
     {
         XFreePixmap (display_info->dpy, cw->preview_pixmap);
         cw->preview_pixmap = None;
+    }
+
+    if (delete && cw->preview_picture)
+    {
+        XRenderFreePicture (display_info->dpy, cw->preview_picture);
+        cw->preview_picture = None;
     }
 
     if (delete && cw->preview)
@@ -2038,8 +2045,6 @@ static void
 update_win_preview (DisplayInfo *display_info, CWindow *cw)
 {
     XRenderPictFormat *format;
-    XRenderPictureAttributes pa;
-    Picture picture;
     double scale;
     int icon_x, icon_y;
     int icon_width_x, icon_width_y;
@@ -2078,10 +2083,6 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
 
     TRACE ("updating preview for window 0x%lx %s", cw->id, cw->c->name);
 
-    pa.subwindow_mode = IncludeInferiors;
-    picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, CPSubwindowMode, &pa);
-//    picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, 0, NULL);
-
     /*
      * Fill the square preview area with transparent background before we layer the preview
      * of the window over it
@@ -2093,7 +2094,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     c.blue  = 0x0;
 
     XRenderFillRectangle(display_info->dpy, PictOpSrc,
-                         picture, &c, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
+                         cw->preview_picture, &c, 0, 0, WIN_PREVIEW_SIZE, WIN_PREVIEW_SIZE);
 
     /*
      * Keeping the original aspect ratio, scale down the picture to fit into the square
@@ -2104,19 +2105,19 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
 
     icon_x = 0;
     icon_y = 0;
-    icon_width_x = WIN_ICON_SIZE;
-    icon_width_y = WIN_ICON_SIZE;
+    icon_width_x = WIN_PREVIEW_SIZE;
+    icon_width_y = WIN_PREVIEW_SIZE;
 
     if (cw->attr.width > cw->attr.height)
     {
-        scale = (double) cw->attr.width / (double)WIN_ICON_SIZE;
-        icon_y = ((double)WIN_ICON_SIZE - (double) cw->attr.height / scale) / 2.0;
+        scale = (double) cw->attr.width / (double)WIN_PREVIEW_SIZE;
+        icon_y = ((double)WIN_PREVIEW_SIZE - (double) cw->attr.height / scale) / 2.0;
         icon_width_y = (double) cw->attr.height / scale;
     }
     else
     {
-        scale = cw->attr.height / (double)WIN_ICON_SIZE;
-        icon_x = ((double)WIN_ICON_SIZE - (double) cw->attr.width / scale) / 2.0;
+        scale = cw->attr.height / (double)WIN_PREVIEW_SIZE;
+        icon_x = ((double)WIN_PREVIEW_SIZE - (double) cw->attr.width / scale) / 2.0;
         icon_width_x = (double) cw->attr.width / scale;
     }
 
@@ -2133,7 +2134,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
     XRenderSetPictureFilter(display_info->dpy, cw->picture, "good", NULL, 0);
 
     XRenderComposite(display_info->dpy, PictOpSrc,
-                     cw->picture, None, picture,
+                     cw->picture, None, cw->preview_picture,
                      0, 0, 0, 0, icon_x, icon_y,
                      icon_width_x,
                      icon_width_y);
@@ -2146,9 +2147,7 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
         XDestroyImage(cw->preview);
     }
 
-    cw->preview = XGetImage (display_info->dpy, cw->preview_pixmap, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE, AllPlanes, ZPixmap);
-
-    XRenderFreePicture(display_info->dpy, picture);
+    cw->preview = XGetImage (display_info->dpy, cw->preview_pixmap, 0, 0, WIN_PREVIEW_SIZE, WIN_PREVIEW_SIZE, AllPlanes, ZPixmap);
 }
 
 
@@ -2351,6 +2350,7 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
 
     new->preview = NULL;
     new->preview_pixmap = None;
+    new->preview_picture = None;
     /* Insert window at top of stack */
     screen_info->cwindows = g_list_prepend (screen_info->cwindows, new);
 
@@ -2364,9 +2364,14 @@ add_win (DisplayInfo *display_info, Window id, Client *c)
     if (c && format)
     {
         new->preview_pixmap = XCreatePixmap(display_info->dpy, screen_info->output,
-                                            WIN_ICON_SIZE, WIN_ICON_SIZE, format->depth);
+                                            WIN_PREVIEW_SIZE, WIN_PREVIEW_SIZE, format->depth);
 
         TRACE ("preview_pixmap created for window 0x%lx", id);
+    }
+
+    if (new->preview_pixmap)
+    {
+        new->preview_picture = XRenderCreatePicture(display_info->dpy, new->preview_pixmap, format, 0, NULL);
     }
 
     TRACE ("window 0x%lx added", id);
@@ -3881,7 +3886,7 @@ compositorRenderPreview(DisplayInfo *display_info, Window id, Picture destinatio
     picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, 0, NULL);
     XRenderComposite(display_info->dpy, PictOpSrc,
                      picture, None, destination,
-                     0, 0, 0, 0, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
+                     0, 0, 0, 0, 0, 0, WIN_PREVIEW_SIZE, WIN_PREVIEW_SIZE);
 
     XRenderFreePicture(display_info->dpy, picture);
 #endif
