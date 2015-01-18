@@ -38,4 +38,7 @@ GdkPixbuf               *getAppPreview                          (DisplayInfo *,
                                                                  int,
                                                                  int);
 
+GtkWidget *
+getAppPreviewImage (DisplayInfo *display_info, Client *c, int width, int height);
+
 #endif /* INC_ICONS_H */

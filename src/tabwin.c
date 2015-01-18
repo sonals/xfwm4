@@ -330,12 +330,19 @@ tabwinSelectWidget (Tabwin *t)
 static GtkWidget *
 createWindowIcon (Client *c, gint icon_size)
 {
-    GdkPixbuf *icon_pixbuf;
+    GdkPixbuf *icon_pixbuf = NULL;
     GdkPixbuf *icon_pixbuf_stated;
-    GtkWidget *icon;
+    GtkWidget *icon = NULL;
 
     g_return_val_if_fail (c, NULL);
     DBG ("entering createWindowIcon");
+
+    ///icon = getAppPreviewImage(c->screen_info->display_info, c, icon_size, icon_size);
+
+    if (icon != NULL)
+    {
+        return icon;
+    }
 
     icon_pixbuf = getAppPreview(c->screen_info->display_info, c, icon_size, icon_size);
     icon = gtk_image_new ();

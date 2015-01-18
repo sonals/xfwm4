@@ -77,4 +77,10 @@ gboolean                 compositorTestServer                   (DisplayInfo *);
 XImage                  *compositorGetWindowPreview             (DisplayInfo *,
                                                                  Window);
 
+Pixmap                   compositorGetWindowPreviewPixmap       (DisplayInfo *display_info,
+                                                                 Window id);
+
+void                     compositorRenderPreview                (DisplayInfo *display_info,
+                                                                 Window id,
+                                                                 Picture destination);
 #endif /* INC_COMPOSITOR_H */

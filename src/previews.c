@@ -34,6 +34,7 @@
 #include <glib.h>
 #include <gdk/gdk.h>
 #include <X11/Xlib.h>
+#include <gdk/gdkx.h>
 
 
 #if (G_BYTE_ORDER == G_LITTLE_ENDIAN)
@@ -1146,4 +1147,50 @@ getAppPreview (DisplayInfo *display_info, Client *c, int width, int height)
     image = compositorGetWindowPreview(display_info, c->frame);
 
     return (image == NULL) ? NULL : gdk_pixbuf_xlib_get_from_image(display_info, image, c->cmap, c->visual, width, height);
+}
+
+/*
+GtkWidget *
+getAppPreviewImage (DisplayInfo *display_info, Client *c, int width, int height)
+{
+	Pixmap preview;
+	GdkPixmap *icon_pixbuf;
+	preview = compositorGetWindowPreviewPixmap(display_info, c->frame);
+	if (preview == None)
+	{
+		return NULL;
+	}
+	icon_pixbuf = gdk_pixmap_foreign_new_for_display(display_info->gdisplay, preview);
+	return gtk_image_new_from_pixmap(icon_pixbuf, NULL);
+}
+
+*/
+
+
+GtkWidget *
+getAppPreviewImage (DisplayInfo *display_info, Client *c, int width, int height)
+{
+	Pixmap preview;
+	GdkPixmap *pixmap;
+	Picture picture;
+	XRenderPictFormat *format;
+	Visual *visual;
+	int screen_number, depth;
+
+
+	screen_number = DefaultScreen (display_info->dpy);
+	visual = DefaultVisual (display_info->dpy, screen_number);
+	depth = DefaultDepth (display_info->dpy, screen_number);
+
+	format = XRenderFindVisualFormat (display_info->dpy, visual);
+
+	pixmap = gdk_pixmap_new (NULL, width, height, depth);
+
+	DBG ("Created pixmap with depth 0%d %s", depth, c->name);
+	picture = XRenderCreatePicture (display_info->dpy, GDK_DRAWABLE_XID (pixmap), format, 0, NULL);
+
+	compositorRenderPreview(display_info, c->frame, picture);
+
+	DBG ("Creating GtkImage from pixmap 0x%lx %s", c->window, c->name);
+	return gtk_image_new_from_pixmap(pixmap, NULL);
 }

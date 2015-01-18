@@ -2070,16 +2070,17 @@ update_win_preview (DisplayInfo *display_info, CWindow *cw)
         return;
     }
 
-    if (!cw->preview_pixmap)
+    if (cw->preview_pixmap == None)
     {
         TRACE ("preview_pixmap not found for window 0x%lx", cw->id);
         return;
     }
 
-    TRACE ("rendering preview for window 0x%lx %s", cw->id, cw->c->name);
+    TRACE ("updating preview for window 0x%lx %s", cw->id, cw->c->name);
 
     pa.subwindow_mode = IncludeInferiors;
     picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, CPSubwindowMode, &pa);
+//    picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, 0, NULL);
 
     /*
      * Fill the square preview area with transparent background before we layer the preview
@@ -3804,5 +3805,84 @@ compositorGetWindowPreview(DisplayInfo *display_info, Window id)
     return NULL;
 #else /* HAVE_COMPOSITOR */
     return NULL;
+#endif
+}
+
+
+Pixmap
+compositorGetWindowPreviewPixmap(DisplayInfo *display_info, Window id)
+{
+#ifdef HAVE_COMPOSITOR
+    CWindow *cw = None;
+    g_return_if_fail (display_info != NULL);
+    g_return_if_fail (id != None);
+    TRACE ("entering for 0x%lx", id);
+
+    if (!compositorIsUsable (display_info))
+    {
+        return None;
+    }
+
+    cw = find_cwindow_in_display (display_info, id);
+    if (cw == NULL)
+    {
+        DBG ("could not find 0x%lx", id);
+        return None;
+    }
+    win_preview(display_info, cw);
+    return cw->preview_pixmap;
+#else /* HAVE_COMPOSITOR */
+    return None;
+#endif
+}
+
+
+void
+compositorRenderPreview(DisplayInfo *display_info, Window id, Picture destination)
+{
+#ifdef HAVE_COMPOSITOR
+    CWindow *cw = None;
+    Picture picture;
+    XRenderPictureAttributes pa;
+    XRenderPictFormat *format;
+
+    g_return_if_fail (display_info != NULL);
+    g_return_if_fail (id != None);
+    TRACE ("entering for 0x%lx", id);
+
+    if (!compositorIsUsable (display_info))
+    {
+        return;
+    }
+
+    cw = find_cwindow_in_display (display_info, id);
+    if (cw == NULL)
+    {
+        DBG ("could not find 0x%lx", id);
+        return;
+    }
+    win_preview(display_info, cw);
+
+    format = get_window_format (cw);
+
+    if (!format)
+    {
+        return;
+    }
+
+    if (cw->preview_pixmap == None)
+    {
+        TRACE ("preview_pixmap not found for window 0x%lx", cw->id);
+        return;
+    }
+
+    DBG ("rendering preview for window 0x%lx %s", cw->id, cw->c->name);
+
+    picture = XRenderCreatePicture(display_info->dpy, cw->preview_pixmap, format, 0, NULL);
+    XRenderComposite(display_info->dpy, PictOpSrc,
+                     picture, None, destination,
+                     0, 0, 0, 0, 0, 0, WIN_ICON_SIZE, WIN_ICON_SIZE);
+
+    XRenderFreePicture(display_info->dpy, picture);
 #endif
 }
